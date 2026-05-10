@@ -159,8 +159,8 @@ def _merge_placeholder_values(
 
 def _record_lookup_key(
     position: str, time: str, channel: str, z: str
-) -> tuple[str, str, str, str]:
-    return position, time, channel, z
+) -> str:
+    return f"{position}_{time}_{channel}_{z}"
 
 
 def _collect_series_matches(
@@ -314,7 +314,7 @@ def build_series_dataset(
             record["relative_path"],
         ),
     )
-    lookup: dict[tuple[str, str, str, str], int] = {}
+    lookup: dict[str, int] = {}
     for index, record in enumerate(records):
         key = _record_lookup_key(
             record["position"], record["time"], record["channel"], record["z"]

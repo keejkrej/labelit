@@ -15,6 +15,7 @@ export {
 
   // Images
   OpenImagePayload,
+  OpenSeriesImagePayload,
   OpenMasksPayload,
   ImageMetaSchema,
   type ImageMeta,

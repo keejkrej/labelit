@@ -117,6 +117,17 @@ export const LoadSeriesDatasetPayload = z.object({
 });
 export type LoadSeriesDatasetPayload = z.infer<typeof LoadSeriesDatasetPayload>;
 
+export const OpenSeriesImagePayload = z.object({
+  folder: z.string(),
+  subfolder_template: z.string().optional(),
+  filename_template: z.string().optional(),
+  position: z.string(),
+  time: z.string(),
+  channel: z.string(),
+  z: z.string(),
+});
+export type OpenSeriesImagePayload = z.infer<typeof OpenSeriesImagePayload>;
+
 // ---------------------------------------------------------------------------
 // Images
 // ---------------------------------------------------------------------------
@@ -276,9 +287,9 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fs:suggest_series_templates"), payload: SuggestSeriesTemplatesPayload }),
   z.object({ type: z.literal("fs:load_series_dataset"), payload: LoadSeriesDatasetPayload }),
   // image
-  z.object({ type: z.literal("image:open"), payload: OpenImagePayload }),
-  z.object({ type: z.literal("image:open_masks"), payload: OpenMasksPayload }),
-  z.object({ type: z.literal("image:save_masks"), payload: SavePathPayload }),
+  z.object({ type: z.literal("image:open"), payload: OpenImagePayload }),    
+  z.object({ type: z.literal("image:open_series"), payload: OpenSeriesImagePayload }),
+  z.object({ type: z.literal("image:open_masks"), payload: OpenMasksPayload }),  z.object({ type: z.literal("image:save_masks"), payload: SavePathPayload }),
   z.object({ type: z.literal("image:save_outlines"), payload: SavePathPayload }),
   z.object({ type: z.literal("image:save_rois"), payload: SavePathPayload }),
   z.object({ type: z.literal("image:save_flows"), payload: SavePathPayload }),

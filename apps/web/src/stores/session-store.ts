@@ -1,22 +1,13 @@
 import { create } from "zustand";
 import type { ImageMeta, MaskState, ModelInfo } from "@labelit/contracts";
 
-export interface SeriesRecord {
-  path: string;
-  relative_path: string;
-  position: string;
-  time: string;
-  channel: string;
-  z: string;
-}
-
 export interface SeriesDataset {
   folder: string;
   template: string;
   subfolder_template: string;
   filename_template: string;
   placeholders: string[];
-  records: SeriesRecord[];
+  axes: Record<string, string[]>;
 }
 
 interface SegmentationProgress {
@@ -56,7 +47,7 @@ interface SessionState {
   params: SegmentationParams;
 
   seriesDataset: SeriesDataset | null;
-  seriesIndex: number;
+  seriesCoordinates: Record<string, string>;
 
   setImage: (image: ImageMeta | null) => void;
   setMask: (mask: MaskState | null) => void;
@@ -65,8 +56,8 @@ interface SessionState {
   setRunDone: (segPath: string | null) => void;
   setParams: (patch: Partial<SegmentationParams>) => void;
 
-  setSeriesDataset: (dataset: SeriesDataset | null, index?: number) => void;
-  setSeriesIndex: (index: number) => void;
+  setSeriesDataset: (dataset: SeriesDataset | null, coords?: Record<string, string>) => void;
+  setSeriesCoordinates: (coords: Record<string, string>) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -78,7 +69,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   params: defaultSegmentationParams,
 
   seriesDataset: null,
-  seriesIndex: 0,
+  seriesCoordinates: {},
 
   setImage: (image) => set({ image, mask: null, segPath: null }),
   setMask: (mask) => set({ mask }),
@@ -87,6 +78,6 @@ export const useSessionStore = create<SessionState>((set) => ({
   setRunDone: (segPath) => set({ segPath, progress: null }),
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
 
-  setSeriesDataset: (dataset, index = 0) => set({ seriesDataset: dataset, seriesIndex: index }),
-  setSeriesIndex: (index) => set({ seriesIndex: index }),
+  setSeriesDataset: (dataset, coords = {}) => set({ seriesDataset: dataset, seriesCoordinates: coords }),
+  setSeriesCoordinates: (coords) => set({ seriesCoordinates: coords }),
 }));

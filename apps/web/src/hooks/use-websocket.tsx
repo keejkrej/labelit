@@ -62,16 +62,34 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         case "fs:series_templates_suggested":
           setSuggestedTemplates(msg.payload);
           break;
-        case "fs:series_dataset_loaded":
-          setSeriesDataset(msg.payload);
-          if (msg.payload.records && msg.payload.records.length > 0) {
-            // we could emit 'image:open' here to load the first image, but actually
-            // we have to use wsRef to send the message.
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ type: "image:open", payload: { path: msg.payload.records[0].path } }));
+        case "fs:series_dataset_loaded": {
+          const dataset = msg.payload;
+          const coords: Record<string, string> = {};
+          for (const [axis, values] of Object.entries(dataset.axes)) {
+            if (Array.isArray(values) && values.length > 0) {
+              coords[axis] = String(values[0]);
             }
           }
+          setSeriesDataset(dataset, coords);
+
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(
+              JSON.stringify({
+                type: "image:open_series",
+                payload: {
+                  folder: dataset.folder,
+                  subfolder_template: dataset.subfolder_template,
+                  filename_template: dataset.filename_template,
+                  position: coords.position || "0",
+                  time: coords.time || "0",
+                  channel: coords.channel || "0",
+                  z: coords.z || "0",
+                },
+              }),
+            );
+          }
           break;
+        }
         case "image:opened":
           setImage(msg.payload);
           break;

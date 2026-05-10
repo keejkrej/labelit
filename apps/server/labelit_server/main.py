@@ -8,15 +8,26 @@ process unless explicitly saved.
 from __future__ import annotations
 
 import traceback
+from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from . import fs, images, masks, models
 from cellpose.gui import series
 
 app = FastAPI(title="Labelit Server", version="0.3.0")
+
+
+class SeriesDatasetPayload(BaseModel):
+    folder: str
+    template: str
+    subfolder_template: str
+    filename_template: str
+    placeholders: list[str]
+    axes: dict[str, list[str]]
 
 app.add_middleware(
     CORSMiddleware,
@@ -71,15 +82,36 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
             raise ValueError("fs:load_series_dataset requires payload.folder")
         result = series.build_series_dataset(
             folder,
-            subfolder_template=payload.get("subfolder_template", ""),
+            subfolder_template=payload.get("subfolder_template", ""),        
             filename_template=payload.get("filename_template", "")
         )
-        await ws.send_json({"type": "fs:series_dataset_loaded", "payload": result})
+        
+        # Use Pydantic to validate and sanitize the payload, dropping internal non-serializable fields like 'lookup'.
+        safe_payload = SeriesDatasetPayload(**result).model_dump()
+        await ws.send_json({"type": "fs:series_dataset_loaded", "payload": safe_payload})
         return
-
     # ----- images -----
     if msg_type == "image:open":
         result = images.open_image(payload["path"])
+        masks.reset_history(result["path"])
+        await ws.send_json({"type": "image:opened", "payload": result})
+        await _send_mask_state(ws)
+        return
+    if msg_type == "image:open_series":
+        dataset = series.build_series_dataset(
+            payload["folder"],
+            subfolder_template=payload.get("subfolder_template", ""),
+            filename_template=payload.get("filename_template", "")
+        )
+        idx = series.resolve_series_record_index(
+            dataset,
+            position=payload["position"],
+            time=payload["time"],
+            channel=payload["channel"],
+            z=payload["z"]
+        )
+        path = dataset["records"][idx]["path"]
+        result = images.open_image(path)
         masks.reset_history(result["path"])
         await ws.send_json({"type": "image:opened", "payload": result})
         await _send_mask_state(ws)
