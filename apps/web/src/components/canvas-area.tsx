@@ -38,10 +38,6 @@ function imageToDisplayBox(
   };
 }
 
-// How often we flush queued stroke points to the server during a streaming
-// stroke. 50 ms = 20 Hz, well below the 16 ms render budget and very low cost
-// over a localhost websocket.
-const STROKE_FLUSH_MS = 50;
 // Minimum point displacement to record (image pixels).
 const STROKE_MIN_PX = 1;
 
@@ -74,7 +70,6 @@ export function CanvasArea() {
   // Streaming stroke state.
   const strokeActiveRef = useRef(false);
   const strokeBufferRef = useRef<Point[]>([]);
-  const strokeFlushTimerRef = useRef<number | null>(null);
   const lastSentPointRef = useRef<Point | null>(null);
   const [livePath, setLivePath] = useState<Point[]>([]);
 
@@ -124,7 +119,46 @@ export function CanvasArea() {
     }
   }, [tool]);
 
-  // ---------------- pointer handlers ----------------
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = maskCanvasRef.current;
+    if (!canvas || !image) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!mask || (!showMasks && !showOutlines)) return;
+
+    // Convert roi ID to a distinct hue
+    const getHsla = (id: number, alpha: number) => {
+      const hue = (id * 137.508) % 360;
+      return `hsla(${hue}, 80%, 60%, ${alpha})`;
+    };
+
+    for (const roi of mask.rois) {
+      ctx.beginPath();
+      for (const contour of roi.contours) {
+        if (contour.length === 0) continue;
+        ctx.moveTo(contour[0][0], contour[0][1]);
+        for (let i = 1; i < contour.length; i++) {
+          ctx.lineTo(contour[i][0], contour[i][1]);
+        }
+        ctx.closePath();
+      }
+
+      if (showMasks) {
+        ctx.fillStyle = getHsla(roi.id, 0.6);
+        ctx.fill();
+      }
+      if (showOutlines) {
+        ctx.strokeStyle = "rgba(255, 240, 90, 0.9)";
+        ctx.lineWidth = Math.max(1, image.width * 0.001);
+        ctx.stroke();
+      }
+    }
+  }, [mask, image, showMasks, showOutlines]);
 
   const isPanningRef = useRef(false);
   const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -344,23 +378,14 @@ export function CanvasArea() {
             className="pointer-events-none absolute inset-0 h-full w-full object-contain"
             draggable={false}
             src={`data:image/png;base64,${image.previewPng}`}
-          />
-          {showMasks && mask?.previewPng && (
-            <img
-              alt="masks"
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-              draggable={false}
-              src={`data:image/png;base64,${mask.previewPng}`}
             />
-          )}
-          {showOutlines && mask?.outlinesPng && (
-            <img
-              alt="outlines"
+            <canvas
+              ref={maskCanvasRef}
+              width={image.width}
+              height={image.height}
               className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-              draggable={false}
-              src={`data:image/png;base64,${mask.outlinesPng}`}
             />
-          )}
+            {/* Draw ROI centroids and IDs for debugging if needed, but skipped for now */}
 
           {box && (
             <svg

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,14 +15,47 @@ import { useSessionStore } from "@/stores/session-store";
 import { useToolStore } from "@/stores/tool-store";
 
 const AXES = [
-  { key: "P", label: "Position" },
-  { key: "T", label: "Time" },
-  { key: "C", label: "Channel" },
-  { key: "Z", label: "Z-plane" },
+  { id: "position", key: "P", label: "Position" },
+  { id: "time", key: "T", label: "Time" },
+  { id: "channel", key: "C", label: "Channel" },
+  { id: "z", key: "Z", label: "Z-plane" },
 ] as const;
 
-function AxisControl({ axisKey, label }: { axisKey: string; label: string }) {
-  const [value, setValue] = useState(0);
+function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; label: string }) {
+  const dataset = useSessionStore((s) => s.seriesDataset);
+  const coords = useSessionStore((s) => s.seriesCoordinates);
+  const setCoords = useSessionStore((s) => s.setSeriesCoordinates);
+  const { send } = useWebSocket();
+
+  const values = dataset?.axes?.[id] || [];
+  const max = Math.max(0, values.length - 1);
+  
+  const currentValStr = coords[id];
+  let currentIndex = values.indexOf(currentValStr);
+  if (currentIndex === -1) currentIndex = 0;
+
+  const setValue = (newIndex: number) => {
+    if (newIndex < 0 || newIndex > max || !dataset) return;
+    const newVal = values[newIndex];
+    if (newVal === currentValStr) return;
+
+    const nextCoords = { ...coords, [id]: newVal };
+    setCoords(nextCoords);
+
+    send({
+      type: "image:open_series",
+      payload: {
+        folder: dataset.folder,
+        subfolder_template: dataset.subfolder_template,
+        filename_template: dataset.filename_template,
+        position: nextCoords.position || "0",
+        time: nextCoords.time || "0",
+        channel: nextCoords.channel || "0",
+        z: nextCoords.z || "0",
+      },
+    });
+  };
+
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <span
@@ -34,7 +66,8 @@ function AxisControl({ axisKey, label }: { axisKey: string; label: string }) {
       </span>
       <Button
         aria-label={`Previous ${label}`}
-        onClick={() => setValue((v) => Math.max(0, v - 1))}
+        onClick={() => setValue(currentIndex - 1)}
+        disabled={max === 0 || currentIndex === 0}
         size="icon-xs"
         variant="outline"
       >
@@ -42,20 +75,22 @@ function AxisControl({ axisKey, label }: { axisKey: string; label: string }) {
       </Button>
       <Slider
         className="min-w-0 flex-1 [&_[data-slot=slider-control]]:min-w-0"
-        max={100}
+        max={max === 0 ? 1 : max}
+        disabled={max === 0}
         onValueChange={(v) => setValue(Array.isArray(v) ? v[0] : v)}
-        value={value}
+        value={currentIndex}
       />
       <Button
         aria-label={`Next ${label}`}
-        onClick={() => setValue((v) => Math.min(100, v + 1))}
+        onClick={() => setValue(currentIndex + 1)}
+        disabled={max === 0 || currentIndex === max}
         size="icon-xs"
         variant="outline"
       >
         <ChevronRight />
       </Button>
       <span className="w-10 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-        {value}
+        {values[currentIndex] ?? 0}
       </span>
     </div>
   );
@@ -96,6 +131,7 @@ export function LeftSidebar() {
       <SidebarSection title="Navigation">
         {AXES.map((axis) => (
           <AxisControl
+            id={axis.id}
             axisKey={axis.key}
             key={axis.key}
             label={axis.label}

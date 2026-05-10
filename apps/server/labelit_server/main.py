@@ -8,16 +8,14 @@ process unless explicitly saved.
 from __future__ import annotations
 
 import traceback
-from typing import Any
 
 import uvicorn
+from cellpose.gui import series
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
 from labelit_contracts import SeriesDatasetPayload
 
 from . import fs, images, masks, models
-from cellpose.gui import series
 
 app = FastAPI(title="Labelit Server", version="0.3.0")
 
@@ -136,20 +134,6 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
     # ----- mask edits -----
     if msg_type == "mask:stroke":
         state = masks.stroke(payload["points"], int(payload["radius"]), bool(payload.get("erase", False)))
-        await ws.send_json({"type": "mask:updated", "payload": state})
-        return
-    if msg_type == "mask:stroke_begin":
-        masks.stroke_begin(
-            payload["point"], int(payload["radius"]), bool(payload.get("erase", False))
-        )
-        return
-    if msg_type == "mask:stroke_append":
-        state = masks.stroke_append(payload["points"])
-        if state is not None:
-            await ws.send_json({"type": "mask:updated", "payload": state})
-        return
-    if msg_type == "mask:stroke_end":
-        state = masks.stroke_end()
         await ws.send_json({"type": "mask:updated", "payload": state})
         return
     if msg_type == "mask:remove_at":

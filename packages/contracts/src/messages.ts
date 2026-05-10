@@ -32,9 +32,6 @@ export const MessageTypeSchema = z.enum([
 
   // Mask editing (client → server)
   "mask:stroke",
-  "mask:stroke_begin",
-  "mask:stroke_append",
-  "mask:stroke_end",
   "mask:remove_at",
   "mask:remove_at_points",
   "mask:remove_in_region",
@@ -188,12 +185,17 @@ export const RemoveAtPayload = z.object({
   y: z.number(),
 });
 export type RemoveAtPayload = z.infer<typeof RemoveAtPayload>;
+export const RoiStateSchema = z.object({
+  id: z.number().int(),
+  contours: z.array(z.array(z.tuple([z.number(), z.number()]))),
+});
+export type RoiState = z.infer<typeof RoiStateSchema>;
+
 export const MaskStateSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
   nRois: z.number().int().nonnegative(),
-  previewPng: z.string().nullable().optional(),
-  outlinesPng: z.string().nullable().optional(),
+  rois: z.array(RoiStateSchema),
   canUndo: z.boolean(),
   canRedo: z.boolean(),
 });
@@ -314,13 +316,23 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
+export const SeriesDatasetPayloadSchema = z.object({
+  folder: z.string(),
+  template: z.string(),
+  subfolder_template: z.string(),
+  filename_template: z.string(),
+  placeholders: z.array(z.string()),
+  axes: z.record(z.string(), z.array(z.string())),
+});
+export type SeriesDatasetPayload = z.infer<typeof SeriesDatasetPayloadSchema>;
+
 export const ServerMessageSchema = z.discriminatedUnion("type", [
   // fs
   z.object({ type: z.literal("fs:roots_listed"), payload: RootsListedPayload }),
   z.object({ type: z.literal("fs:dir_listed"), payload: DirListedPayload }),
   z.object({ type: z.literal("fs:home_resolved"), payload: HomeResolvedPayload }),
   z.object({ type: z.literal("fs:series_templates_suggested"), payload: z.any() }),
-  z.object({ type: z.literal("fs:series_dataset_loaded"), payload: z.any() }),
+  z.object({ type: z.literal("fs:series_dataset_loaded"), payload: SeriesDatasetPayloadSchema }),
   // image
   z.object({ type: z.literal("image:opened"), payload: ImageMetaSchema }),
   z.object({ type: z.literal("image:saved"), payload: SavedPayload }),

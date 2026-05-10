@@ -84,12 +84,15 @@ class RemoveAtPayload(BaseModel):
     x: float
     y: float
 
+class RoiState(BaseModel):
+    id: int
+    contours: list[list[list[int]]]
+
 class MaskState(BaseModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)
     nRois: int = Field(ge=0)
-    previewPng: str | None = None
-    outlinesPng: str | None = None
+    rois: list[RoiState]
     canUndo: bool
     canRedo: bool
 

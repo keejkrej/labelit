@@ -8,7 +8,6 @@ import { LeftSidebar } from "@/components/left-sidebar";
 import { RightSidebar } from "@/components/right-sidebar";
 import { FileBrowserDialog } from "@/components/file-browser-dialog";
 import { HeaderMenus } from "@/components/header-menus";
-import { useFsStore } from "@/stores/fs-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useToolStore } from "@/stores/tool-store";
 import {
@@ -98,7 +97,6 @@ function AppShell() {
 }
 
 function Toolbar() {
-  const image = useSessionStore((s) => s.image);
   const tool = useToolStore((s) => s.tool);
   const setTool = useToolStore((s) => s.setTool);
 
