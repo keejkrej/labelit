@@ -16,9 +16,11 @@ import {
   Eraser,
   FileText,
   FolderOpen,
+  Lasso,
   Maximize2,
   MousePointer2,
   Move,
+  MousePointerClick,
   PencilLine,
   Settings2,
   ZoomIn,
@@ -112,7 +114,7 @@ function Toolbar() {
   const setTool = useToolStore((s) => s.setTool);
 
   const toolButton = (
-    value: "pointer" | "pan" | "brush" | "delete",
+    value: "pointer" | "pan" | "brush" | "delete" | "select-click" | "select-region",
     label: string,
     Icon: React.ComponentType<{ className?: string }>,
   ) => (
@@ -149,6 +151,8 @@ function Toolbar() {
       {toolButton("pan", "Pan", Move)}
       {toolButton("brush", "Brush (B)", PencilLine)}
       {toolButton("delete", "Delete ROI (E)", Eraser)}
+      {toolButton("select-click", "Click-select ROIs to delete", MousePointerClick)}
+      {toolButton("select-region", "Region-select ROIs to delete (double-click to close)", Lasso)}
       <div className="mx-1 h-4 w-px bg-border" />
       <Button size="icon-xs" variant="ghost">
         <ZoomOut />

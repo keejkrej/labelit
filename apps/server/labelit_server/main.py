@@ -95,8 +95,34 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
         state = masks.stroke(payload["points"], int(payload["radius"]), bool(payload.get("erase", False)))
         await ws.send_json({"type": "mask:updated", "payload": state})
         return
+    if msg_type == "mask:stroke_begin":
+        state = masks.stroke_begin(
+            payload["point"], int(payload["radius"]), bool(payload.get("erase", False))
+        )
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:stroke_append":
+        state = masks.stroke_append(payload["points"])
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:stroke_end":
+        state = masks.stroke_end()
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
     if msg_type == "mask:remove_at":
-        state = masks.remove_at(int(payload["x"]), int(payload["y"]))
+        state = masks.remove_at(payload["x"], payload["y"])
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:remove_at_points":
+        state = masks.remove_at_points(payload["points"])
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:remove_in_region":
+        state = masks.remove_in_region(payload["polygon"])
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:merge_at":
+        state = masks.merge_at(payload["a"], payload["b"])
         await ws.send_json({"type": "mask:updated", "payload": state})
         return
     if msg_type == "mask:clear":

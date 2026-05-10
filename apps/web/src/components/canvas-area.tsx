@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Check, X } from "lucide-react";
 import type { Point } from "@labelit/contracts";
+import { Button } from "@/components/ui/button";
 import { useWebSocket } from "@/hooks/use-websocket";
 import { useSessionStore } from "@/stores/session-store";
 import { useToolStore } from "@/stores/tool-store";
 import { cn } from "@/lib/utils";
 
 interface DisplayBox {
-  // The rendered <img>'s bounding rect within the canvas area.
   left: number;
   top: number;
   width: number;
@@ -18,7 +19,6 @@ function imageToDisplayBox(
   imageWidth: number,
   imageHeight: number,
 ): DisplayBox {
-  // The image is rendered "object-contain" inside the container.
   const containerAspect = container.width / container.height;
   const imageAspect = imageWidth / imageHeight;
   let width: number;
@@ -38,6 +38,13 @@ function imageToDisplayBox(
   };
 }
 
+// How often we flush queued stroke points to the server during a streaming
+// stroke. 50 ms = 20 Hz, well below the 16 ms render budget and very low cost
+// over a localhost websocket.
+const STROKE_FLUSH_MS = 50;
+// Minimum point displacement to record (image pixels).
+const STROKE_MIN_PX = 1;
+
 export function CanvasArea() {
   const { send } = useWebSocket();
   const image = useSessionStore((s) => s.image);
@@ -45,10 +52,26 @@ export function CanvasArea() {
   const tool = useToolStore((s) => s.tool);
   const brushSize = useToolStore((s) => s.brushSize);
   const showMasks = useToolStore((s) => s.showMasks);
+  const showOutlines = useToolStore((s) => s.showOutlines);
+
+  const pendingMerge = useToolStore((s) => s.pendingMerge);
+  const setPendingMerge = useToolStore((s) => s.setPendingMerge);
+  const pickedPoints = useToolStore((s) => s.pickedPoints);
+  const addPickedPoint = useToolStore((s) => s.addPickedPoint);
+  const clearPickedPoints = useToolStore((s) => s.clearPickedPoints);
+  const regionPath = useToolStore((s) => s.regionPath);
+  const addRegionVertex = useToolStore((s) => s.addRegionVertex);
+  const clearRegion = useToolStore((s) => s.clearRegion);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [strokePath, setStrokePath] = useState<Point[] | null>(null);
-  const [pointer, setPointer] = useState<{ x: number; y: number } | null>(null);
+  const [pointer, setPointer] = useState<Point | null>(null);
+
+  // Streaming stroke state.
+  const strokeActiveRef = useRef(false);
+  const strokeBufferRef = useRef<Point[]>([]);
+  const strokeFlushTimerRef = useRef<number | null>(null);
+  const lastSentPointRef = useRef<Point | null>(null);
+  const [livePath, setLivePath] = useState<Point[]>([]);
 
   const screenToImage = useCallback(
     (clientX: number, clientY: number): Point | null => {
@@ -67,15 +90,82 @@ export function CanvasArea() {
     [image],
   );
 
+  // ---------------- streaming stroke helpers ----------------
+  const flushStroke = useCallback(() => {
+    if (strokeBufferRef.current.length === 0) return;
+    const points = strokeBufferRef.current;
+    strokeBufferRef.current = [];
+    send({ type: "mask:stroke_append", payload: { points } });
+  }, [send]);
+
+  const scheduleFlush = useCallback(() => {
+    if (strokeFlushTimerRef.current != null) return;
+    strokeFlushTimerRef.current = window.setTimeout(() => {
+      strokeFlushTimerRef.current = null;
+      flushStroke();
+    }, STROKE_FLUSH_MS);
+  }, [flushStroke]);
+
+  const cleanupStroke = useCallback(() => {
+    if (strokeFlushTimerRef.current != null) {
+      window.clearTimeout(strokeFlushTimerRef.current);
+      strokeFlushTimerRef.current = null;
+    }
+    strokeBufferRef.current = [];
+    lastSentPointRef.current = null;
+    strokeActiveRef.current = false;
+    setLivePath([]);
+  }, []);
+
+  useEffect(() => () => cleanupStroke(), [cleanupStroke]);
+
+  // ---------------- pointer handlers ----------------
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!image) return;
     const p = screenToImage(e.clientX, e.clientY);
     if (!p) return;
+
+    // Alt+click → two-step merge across any tool.
+    if (e.altKey && !e.shiftKey && !e.ctrlKey) {
+      if (pendingMerge) {
+        send({ type: "mask:merge_at", payload: { a: pendingMerge, b: p } });
+        setPendingMerge(null);
+      } else {
+        setPendingMerge(p);
+      }
+      return;
+    }
+
+    // Ctrl+click → delete the ROI under the pixel, regardless of tool.
+    if (e.ctrlKey || e.metaKey) {
+      send({ type: "mask:remove_at", payload: { x: p.x, y: p.y } });
+      return;
+    }
+
     if (tool === "brush") {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-      setStrokePath([p]);
-    } else if (tool === "delete") {
+      strokeActiveRef.current = true;
+      lastSentPointRef.current = p;
+      strokeBufferRef.current = [];
+      setLivePath([p]);
+      send({
+        type: "mask:stroke_begin",
+        payload: { point: p, radius: brushSize },
+      });
+      return;
+    }
+    if (tool === "delete") {
       send({ type: "mask:remove_at", payload: { x: p.x, y: p.y } });
+      return;
+    }
+    if (tool === "select-click") {
+      addPickedPoint(p);
+      return;
+    }
+    if (tool === "select-region") {
+      addRegionVertex(p);
+      return;
     }
   };
 
@@ -83,27 +173,45 @@ export function CanvasArea() {
     if (!image) return;
     const p = screenToImage(e.clientX, e.clientY);
     setPointer(p);
-    if (tool === "brush" && strokePath) {
-      // Throttle by minimum displacement so we don't accumulate thousands of points.
-      const last = strokePath[strokePath.length - 1];
-      if (p && (Math.abs(p.x - last.x) >= 1 || Math.abs(p.y - last.y) >= 1)) {
-        setStrokePath([...strokePath, p]);
+    if (!p) return;
+
+    if (tool === "brush" && strokeActiveRef.current) {
+      const last = lastSentPointRef.current;
+      if (
+        last == null ||
+        Math.abs(p.x - last.x) >= STROKE_MIN_PX ||
+        Math.abs(p.y - last.y) >= STROKE_MIN_PX
+      ) {
+        strokeBufferRef.current.push(p);
+        lastSentPointRef.current = p;
+        setLivePath((path) => [...path, p]);
+        scheduleFlush();
       }
     }
   };
 
   const finishStroke = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (tool === "brush" && strokePath && strokePath.length > 0) {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      send({
-        type: "mask:stroke",
-        payload: { points: strokePath, radius: brushSize },
-      });
-      setStrokePath(null);
+    if (tool === "brush" && strokeActiveRef.current) {
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // already released
+      }
+      flushStroke();
+      send({ type: "mask:stroke_end" });
+      cleanupStroke();
     }
   };
 
-  // Track display box for overlaying the stroke preview.
+  // Double-click closes a region polygon and dispatches the delete.
+  const handleDoubleClick = () => {
+    if (tool === "select-region" && regionPath.length >= 3) {
+      send({ type: "mask:remove_in_region", payload: { polygon: regionPath } });
+      clearRegion();
+    }
+  };
+
+  // ---------------- display box for overlay svgs ----------------
   const [box, setBox] = useState<DisplayBox | null>(null);
   useEffect(() => {
     if (!containerRef.current || !image) {
@@ -121,6 +229,33 @@ export function CanvasArea() {
     return () => ro.disconnect();
   }, [image]);
 
+  // ---------------- selection commit/cancel ----------------
+  const commitPicked = () => {
+    if (pickedPoints.length > 0) {
+      send({ type: "mask:remove_at_points", payload: { points: pickedPoints } });
+      clearPickedPoints();
+    }
+  };
+  const commitRegion = () => {
+    if (regionPath.length >= 3) {
+      send({ type: "mask:remove_in_region", payload: { polygon: regionPath } });
+      clearRegion();
+    }
+  };
+
+  // ESC cancels pending merge / pending selections.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (pendingMerge) setPendingMerge(null);
+        if (regionPath.length > 0) clearRegion();
+        if (pickedPoints.length > 0) clearPickedPoints();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [pendingMerge, regionPath, pickedPoints, setPendingMerge, clearRegion, clearPickedPoints]);
+
   const cursorClass =
     tool === "brush"
       ? "cursor-crosshair"
@@ -136,6 +271,7 @@ export function CanvasArea() {
         "relative flex flex-1 flex-col overflow-hidden bg-[oklch(0.18_0_0)] dark:bg-[oklch(0.12_0_0)]",
         cursorClass,
       )}
+      onDoubleClick={handleDoubleClick}
       onPointerCancel={finishStroke}
       onPointerDown={handlePointerDown}
       onPointerLeave={() => setPointer(null)}
@@ -154,37 +290,21 @@ export function CanvasArea() {
           {showMasks && mask?.previewPng && (
             <img
               alt="masks"
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain mix-blend-normal"
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
               draggable={false}
               src={`data:image/png;base64,${mask.previewPng}`}
             />
           )}
-          {/* In-flight stroke preview */}
-          {box && strokePath && strokePath.length > 0 && (
-            <svg
-              aria-hidden="true"
-              className="pointer-events-none absolute"
-              style={{
-                left: box.left,
-                top: box.top,
-                width: box.width,
-                height: box.height,
-              }}
-              viewBox={`0 0 ${image.width} ${image.height}`}
-            >
-              <polyline
-                fill="none"
-                points={strokePath.map((p) => `${p.x},${p.y}`).join(" ")}
-                stroke="rgb(255,210,80)"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeOpacity="0.85"
-                strokeWidth={2 * brushSize}
-              />
-            </svg>
+          {showOutlines && mask?.outlinesPng && (
+            <img
+              alt="outlines"
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              draggable={false}
+              src={`data:image/png;base64,${mask.outlinesPng}`}
+            />
           )}
-          {/* Brush cursor halo */}
-          {box && tool === "brush" && pointer && (
+
+          {box && (
             <svg
               aria-hidden="true"
               className="pointer-events-none absolute"
@@ -196,14 +316,74 @@ export function CanvasArea() {
               }}
               viewBox={`0 0 ${image.width} ${image.height}`}
             >
-              <circle
-                cx={pointer.x}
-                cy={pointer.y}
-                fill="none"
-                r={brushSize}
-                stroke="rgba(255,255,255,0.7)"
-                strokeWidth={1}
-              />
+              {/* In-flight stroke preview */}
+              {livePath.length > 1 && (
+                <polyline
+                  fill="none"
+                  points={livePath.map((p) => `${p.x},${p.y}`).join(" ")}
+                  stroke="rgb(255,210,80)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeOpacity="0.85"
+                  strokeWidth={2 * brushSize}
+                />
+              )}
+              {/* Region-select path */}
+              {regionPath.length > 0 && (
+                <polyline
+                  fill="rgba(120,200,255,0.15)"
+                  points={[...regionPath, regionPath[0]]
+                    .map((p) => `${p.x},${p.y}`)
+                    .join(" ")}
+                  stroke="rgb(120,200,255)"
+                  strokeDasharray="4 3"
+                  strokeWidth={Math.max(1, image.width * 0.002)}
+                />
+              )}
+              {/* Region vertices */}
+              {regionPath.map((p, i) => (
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  fill="rgb(120,200,255)"
+                  key={i}
+                  r={Math.max(2, image.width * 0.003)}
+                />
+              ))}
+              {/* Click-select picks */}
+              {pickedPoints.map((p, i) => (
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  fill="none"
+                  key={i}
+                  r={Math.max(4, image.width * 0.006)}
+                  stroke="rgb(255,90,90)"
+                  strokeWidth={Math.max(1, image.width * 0.0025)}
+                />
+              ))}
+              {/* Brush cursor halo */}
+              {tool === "brush" && pointer && (
+                <circle
+                  cx={pointer.x}
+                  cy={pointer.y}
+                  fill="none"
+                  r={brushSize}
+                  stroke="rgba(255,255,255,0.7)"
+                  strokeWidth={1}
+                />
+              )}
+              {/* Merge pending marker */}
+              {pendingMerge && (
+                <circle
+                  cx={pendingMerge.x}
+                  cy={pendingMerge.y}
+                  fill="none"
+                  r={Math.max(4, image.width * 0.008)}
+                  stroke="rgb(160,255,160)"
+                  strokeWidth={Math.max(1, image.width * 0.003)}
+                />
+              )}
             </svg>
           )}
         </>
@@ -215,7 +395,7 @@ export function CanvasArea() {
         </div>
       )}
 
-      {/* Floating canvas label */}
+      {/* HUD */}
       <div className="pointer-events-none absolute top-3 left-3 rounded-md bg-black/40 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
         {image
           ? `${image.path.split(/[\\/]/).pop()} · Z 1/${image.depth} · ${image.channels}ch`
@@ -225,6 +405,68 @@ export function CanvasArea() {
         {mask ? `${mask.nRois} ROIs` : "no masks"}
         {pointer ? ` · x ${pointer.x.toFixed(0)} y ${pointer.y.toFixed(0)}` : ""}
       </div>
+
+      {/* Pending merge banner */}
+      {pendingMerge && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur-sm">
+          Alt+click another cell to merge · Esc to cancel
+        </div>
+      )}
+
+      {/* Selection commit/cancel HUD */}
+      {(tool === "select-click" || tool === "select-region") && (
+        <SelectionCommitBar
+          tool={tool}
+          pickedCount={pickedPoints.length}
+          regionVertices={regionPath.length}
+          onCommit={tool === "select-click" ? commitPicked : commitRegion}
+          onCancel={() => {
+            clearPickedPoints();
+            clearRegion();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SelectionCommitBar({
+  tool,
+  pickedCount,
+  regionVertices,
+  onCommit,
+  onCancel,
+}: {
+  tool: "select-click" | "select-region";
+  pickedCount: number;
+  regionVertices: number;
+  onCommit: () => void;
+  onCancel: () => void;
+}) {
+  const ready =
+    tool === "select-click" ? pickedCount > 0 : regionVertices >= 3;
+  const label =
+    tool === "select-click"
+      ? `${pickedCount} ROI${pickedCount === 1 ? "" : "s"} picked`
+      : `${regionVertices} vertices · double-click to close`;
+
+  return (
+    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 text-[11px] text-white/90 backdrop-blur-sm">
+      <span className="font-mono">{label}</span>
+      <Button
+        className="h-6"
+        disabled={!ready}
+        onClick={onCommit}
+        size="xs"
+        variant="default"
+      >
+        <Check />
+        delete
+      </Button>
+      <Button className="h-6" onClick={onCancel} size="xs" variant="outline">
+        <X />
+        cancel
+      </Button>
     </div>
   );
 }

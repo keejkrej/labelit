@@ -28,7 +28,13 @@ export const MessageTypeSchema = z.enum([
 
   // Mask editing (client → server)
   "mask:stroke",
+  "mask:stroke_begin",
+  "mask:stroke_append",
+  "mask:stroke_end",
   "mask:remove_at",
+  "mask:remove_at_points",
+  "mask:remove_in_region",
+  "mask:merge_at",
   "mask:clear",
   "mask:undo",
   "mask:redo",
@@ -161,10 +167,44 @@ export const MaskStateSchema = z.object({
   height: z.number().int().positive(),
   nRois: z.number().int().nonnegative(),
   previewPng: z.string().nullable().optional(),
+  outlinesPng: z.string().nullable().optional(),
   canUndo: z.boolean(),
   canRedo: z.boolean(),
 });
 export type MaskState = z.infer<typeof MaskStateSchema>;
+
+// Streaming strokes — begin opens a new ROI label and snapshots history; append
+// adds segments without snapshotting; end finalises. erase mode paints 0.
+export const StrokeBeginPayload = z.object({
+  point: PointSchema,
+  radius: z.number().int().positive(),
+  erase: z.boolean().optional(),
+});
+export type StrokeBeginPayload = z.infer<typeof StrokeBeginPayload>;
+
+export const StrokeAppendPayload = z.object({
+  points: z.array(PointSchema).min(1),
+});
+export type StrokeAppendPayload = z.infer<typeof StrokeAppendPayload>;
+
+// Batch delete via a list of clicked pixels (one undo step for all).
+export const RemoveAtPointsPayload = z.object({
+  points: z.array(PointSchema).min(1),
+});
+export type RemoveAtPointsPayload = z.infer<typeof RemoveAtPointsPayload>;
+
+// Polygon region: ROI labels touching the rasterised polygon are removed.
+export const RemoveInRegionPayload = z.object({
+  polygon: z.array(PointSchema).min(3),
+});
+export type RemoveInRegionPayload = z.infer<typeof RemoveInRegionPayload>;
+
+// Merge two ROIs by clicking one pixel inside each.
+export const MergeAtPayload = z.object({
+  a: PointSchema,
+  b: PointSchema,
+});
+export type MergeAtPayload = z.infer<typeof MergeAtPayload>;
 
 // ---------------------------------------------------------------------------
 // Models
@@ -242,7 +282,13 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("image:save_seg"), payload: SavePathPayload }),
   // mask edits
   z.object({ type: z.literal("mask:stroke"), payload: StrokePayload }),
+  z.object({ type: z.literal("mask:stroke_begin"), payload: StrokeBeginPayload }),
+  z.object({ type: z.literal("mask:stroke_append"), payload: StrokeAppendPayload }),
+  z.object({ type: z.literal("mask:stroke_end") }),
   z.object({ type: z.literal("mask:remove_at"), payload: RemoveAtPayload }),
+  z.object({ type: z.literal("mask:remove_at_points"), payload: RemoveAtPointsPayload }),
+  z.object({ type: z.literal("mask:remove_in_region"), payload: RemoveInRegionPayload }),
+  z.object({ type: z.literal("mask:merge_at"), payload: MergeAtPayload }),
   z.object({ type: z.literal("mask:clear") }),
   z.object({ type: z.literal("mask:undo") }),
   z.object({ type: z.literal("mask:redo") }),

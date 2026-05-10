@@ -97,6 +97,14 @@ export function useShortcuts(): void {
             e.preventDefault();
             useToolStore.getState().setTool("delete");
             return;
+          case "s":
+            e.preventDefault();
+            useToolStore.getState().setTool("select-click");
+            return;
+          case "r":
+            e.preventDefault();
+            useToolStore.getState().setTool("select-region");
+            return;
         }
       }
     };

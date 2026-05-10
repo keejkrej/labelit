@@ -24,6 +24,7 @@ export function HeaderMenus() {
   const toggleMasks = useToolStore((s) => s.toggleMasks);
   const showOutlines = useToolStore((s) => s.showOutlines);
   const toggleOutlines = useToolStore((s) => s.toggleOutlines);
+  const setTool = useToolStore((s) => s.setTool);
   const [trainOpen, setTrainOpen] = useState(false);
 
   const hasImage = !!image;
@@ -113,6 +114,16 @@ export function HeaderMenus() {
               onClick={() => send({ type: "mask:clear" })}
             >
               Clear all masks <MenuShortcut>Ctrl+0</MenuShortcut>
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem disabled>
+              Merge cells <MenuShortcut>Alt+Click</MenuShortcut>
+            </MenuItem>
+            <MenuItem onClick={() => setTool("select-click")}>
+              Select Points <MenuShortcut>S</MenuShortcut>
+            </MenuItem>
+            <MenuItem onClick={() => setTool("select-region")}>
+              Select Region <MenuShortcut>R</MenuShortcut>
             </MenuItem>
             <MenuSeparator />
             <MenuCheckboxItem
