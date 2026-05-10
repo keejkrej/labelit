@@ -14,6 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import fs, images, masks, models
+from cellpose.gui import series
 
 app = FastAPI(title="Labelit Server", version="0.3.0")
 
@@ -57,6 +58,24 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
     if msg_type == "fs:home":
         await ws.send_json({"type": "fs:home_resolved", "payload": fs.resolve_home()})
         return
+    if msg_type == "fs:suggest_series_templates":
+        folder = payload.get("folder")
+        if not folder:
+            raise ValueError("fs:suggest_series_templates requires payload.folder")
+        result = series.suggest_series_templates(folder)
+        await ws.send_json({"type": "fs:series_templates_suggested", "payload": result})
+        return
+    if msg_type == "fs:load_series_dataset":
+        folder = payload.get("folder")
+        if not folder:
+            raise ValueError("fs:load_series_dataset requires payload.folder")
+        result = series.build_series_dataset(
+            folder,
+            subfolder_template=payload.get("subfolder_template", ""),
+            filename_template=payload.get("filename_template", "")
+        )
+        await ws.send_json({"type": "fs:series_dataset_loaded", "payload": result})
+        return
 
     # ----- images -----
     if msg_type == "image:open":
@@ -96,14 +115,14 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
         await ws.send_json({"type": "mask:updated", "payload": state})
         return
     if msg_type == "mask:stroke_begin":
-        state = masks.stroke_begin(
+        masks.stroke_begin(
             payload["point"], int(payload["radius"]), bool(payload.get("erase", False))
         )
-        await ws.send_json({"type": "mask:updated", "payload": state})
         return
     if msg_type == "mask:stroke_append":
         state = masks.stroke_append(payload["points"])
-        await ws.send_json({"type": "mask:updated", "payload": state})
+        if state is not None:
+            await ws.send_json({"type": "mask:updated", "payload": state})
         return
     if msg_type == "mask:stroke_end":
         state = masks.stroke_end()

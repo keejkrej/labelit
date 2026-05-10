@@ -19,6 +19,9 @@ interface FsState {
   error: string | null;
   selected: FsEntry | null;
   onPick: ((path: string) => void) | null;
+  autoloadMasks: boolean;
+  disableAutosave: boolean;
+  suggestedTemplates: { subfolder_template: string; filename_template: string } | null;
 
   openBrowser: (
     mode: FsState["mode"],
@@ -31,6 +34,9 @@ interface FsState {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setSelected: (entry: FsEntry | null) => void;
+  setAutoloadMasks: (val: boolean) => void;
+  setDisableAutosave: (val: boolean) => void;
+  setSuggestedTemplates: (val: { subfolder_template: string; filename_template: string } | null) => void;
 }
 
 export const useFsStore = create<FsState>((set) => ({
@@ -42,6 +48,9 @@ export const useFsStore = create<FsState>((set) => ({
   error: null,
   selected: null,
   onPick: null,
+  autoloadMasks: false,
+  disableAutosave: false,
+  suggestedTemplates: null,
 
   openBrowser: (mode, options) =>
     set({
@@ -62,6 +71,9 @@ export const useFsStore = create<FsState>((set) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
   setSelected: (entry) => set({ selected: entry }),
+  setAutoloadMasks: (autoloadMasks) => set({ autoloadMasks }),
+  setDisableAutosave: (disableAutosave) => set({ disableAutosave }),
+  setSuggestedTemplates: (suggestedTemplates) => set({ suggestedTemplates }),
 }));
 
 export const IMAGE_PATTERNS = ["*.tif", "*.tiff", "*.png", "*.jpg", "*.jpeg", "*.bmp"];

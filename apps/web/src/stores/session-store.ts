@@ -1,6 +1,24 @@
 import { create } from "zustand";
 import type { ImageMeta, MaskState, ModelInfo } from "@labelit/contracts";
 
+export interface SeriesRecord {
+  path: string;
+  relative_path: string;
+  position: string;
+  time: string;
+  channel: string;
+  z: string;
+}
+
+export interface SeriesDataset {
+  folder: string;
+  template: string;
+  subfolder_template: string;
+  filename_template: string;
+  placeholders: string[];
+  records: SeriesRecord[];
+}
+
 interface SegmentationProgress {
   job: "run" | "train";
   progress: number;
@@ -37,12 +55,18 @@ interface SessionState {
   segPath: string | null;
   params: SegmentationParams;
 
+  seriesDataset: SeriesDataset | null;
+  seriesIndex: number;
+
   setImage: (image: ImageMeta | null) => void;
   setMask: (mask: MaskState | null) => void;
   setModels: (models: ModelInfo[]) => void;
   setProgress: (progress: SegmentationProgress | null) => void;
   setRunDone: (segPath: string | null) => void;
   setParams: (patch: Partial<SegmentationParams>) => void;
+
+  setSeriesDataset: (dataset: SeriesDataset | null, index?: number) => void;
+  setSeriesIndex: (index: number) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -53,10 +77,16 @@ export const useSessionStore = create<SessionState>((set) => ({
   segPath: null,
   params: defaultSegmentationParams,
 
+  seriesDataset: null,
+  seriesIndex: 0,
+
   setImage: (image) => set({ image, mask: null, segPath: null }),
   setMask: (mask) => set({ mask }),
   setModels: (models) => set({ models }),
   setProgress: (progress) => set({ progress }),
   setRunDone: (segPath) => set({ segPath, progress: null }),
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
+
+  setSeriesDataset: (dataset, index = 0) => set({ seriesDataset: dataset, seriesIndex: index }),
+  setSeriesIndex: (index) => set({ seriesIndex: index }),
 }));

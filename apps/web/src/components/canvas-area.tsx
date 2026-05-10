@@ -63,6 +63,11 @@ export function CanvasArea() {
   const addRegionVertex = useToolStore((s) => s.addRegionVertex);
   const clearRegion = useToolStore((s) => s.clearRegion);
 
+  const zoom = useToolStore((s) => s.zoom);
+  const setZoom = useToolStore((s) => s.setZoom);
+  const pan = useToolStore((s) => s.pan);
+  const setPan = useToolStore((s) => s.setPan);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [pointer, setPointer] = useState<Point | null>(null);
 
@@ -79,50 +84,61 @@ export function CanvasArea() {
       if (!container || !image) return null;
       const rect = container.getBoundingClientRect();
       const box = imageToDisplayBox(rect, image.width, image.height);
-      const xInBox = clientX - rect.left - box.left;
-      const yInBox = clientY - rect.top - box.top;
+      let xInBox = clientX - rect.left - box.left;
+      let yInBox = clientY - rect.top - box.top;
+
+      xInBox = (xInBox - pan.x) / zoom;
+      yInBox = (yInBox - pan.y) / zoom;
+
       if (xInBox < 0 || yInBox < 0 || xInBox > box.width || yInBox > box.height) return null;
       return {
         x: (xInBox / box.width) * image.width,
         y: (yInBox / box.height) * image.height,
       };
     },
-    [image],
+    [image, pan, zoom],
   );
 
   // ---------------- streaming stroke helpers ----------------
-  const flushStroke = useCallback(() => {
-    if (strokeBufferRef.current.length === 0) return;
-    const points = strokeBufferRef.current;
-    strokeBufferRef.current = [];
-    send({ type: "mask:stroke_append", payload: { points } });
-  }, [send]);
-
-  const scheduleFlush = useCallback(() => {
-    if (strokeFlushTimerRef.current != null) return;
-    strokeFlushTimerRef.current = window.setTimeout(() => {
-      strokeFlushTimerRef.current = null;
-      flushStroke();
-    }, STROKE_FLUSH_MS);
-  }, [flushStroke]);
 
   const cleanupStroke = useCallback(() => {
-    if (strokeFlushTimerRef.current != null) {
-      window.clearTimeout(strokeFlushTimerRef.current);
-      strokeFlushTimerRef.current = null;
-    }
     strokeBufferRef.current = [];
     lastSentPointRef.current = null;
     strokeActiveRef.current = false;
-    setLivePath([]);
+    // We preserve livePath here so the mask contour doesn't flicker before the server responds.
   }, []);
 
   useEffect(() => () => cleanupStroke(), [cleanupStroke]);
 
+  // Clear live path when mask updates from the server, avoiding flicker.
+  useEffect(() => {
+    if (!strokeActiveRef.current) {
+      setLivePath([]);
+    }
+  }, [mask]);
+
+  // Clear live path if the tool changes away from brush.
+  useEffect(() => {
+    if (tool !== "brush") {
+      setLivePath([]);
+    }
+  }, [tool]);
+
   // ---------------- pointer handlers ----------------
+
+  const isPanningRef = useRef(false);
+  const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!image) return;
+
+    if (tool === "pan") {
+      isPanningRef.current = true;
+      lastPanPointRef.current = { x: e.clientX, y: e.clientY };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
+
     const p = screenToImage(e.clientX, e.clientY);
     if (!p) return;
 
@@ -147,12 +163,8 @@ export function CanvasArea() {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       strokeActiveRef.current = true;
       lastSentPointRef.current = p;
-      strokeBufferRef.current = [];
+      strokeBufferRef.current = [p];
       setLivePath([p]);
-      send({
-        type: "mask:stroke_begin",
-        payload: { point: p, radius: brushSize },
-      });
       return;
     }
     if (tool === "delete") {
@@ -171,6 +183,15 @@ export function CanvasArea() {
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!image) return;
+
+    if (isPanningRef.current && lastPanPointRef.current) {
+      const dx = e.clientX - lastPanPointRef.current.x;
+      const dy = e.clientY - lastPanPointRef.current.y;
+      setPan((p) => ({ x: p.x + dx, y: p.y + dy }));
+      lastPanPointRef.current = { x: e.clientX, y: e.clientY };
+      return;
+    }
+
     const p = screenToImage(e.clientX, e.clientY);
     setPointer(p);
     if (!p) return;
@@ -185,20 +206,35 @@ export function CanvasArea() {
         strokeBufferRef.current.push(p);
         lastSentPointRef.current = p;
         setLivePath((path) => [...path, p]);
-        scheduleFlush();
       }
     }
   };
 
   const finishStroke = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isPanningRef.current) {
+      isPanningRef.current = false;
+      lastPanPointRef.current = null;
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {}
+      return;
+    }
+
     if (tool === "brush" && strokeActiveRef.current) {
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {
         // already released
       }
-      flushStroke();
-      send({ type: "mask:stroke_end" });
+      
+      const points = strokeBufferRef.current;
+      if (points.length > 0) {
+        send({ 
+          type: "mask:stroke", 
+          payload: { points, radius: brushSize }
+        });
+      }
+      
       cleanupStroke();
     }
   };
@@ -209,6 +245,24 @@ export function CanvasArea() {
       send({ type: "mask:remove_in_region", payload: { polygon: regionPath } });
       clearRegion();
     }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (!image || !containerRef.current) return;
+    const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+    const rect = containerRef.current.getBoundingClientRect();
+    const cx = e.clientX - rect.left;
+    const cy = e.clientY - rect.top;
+
+    setZoom((z) => {
+      const newZoom = Math.max(0.1, Math.min(20, z * zoomFactor));
+      const effectiveFactor = newZoom / z;
+      setPan((p) => ({
+        x: cx - (cx - p.x) * effectiveFactor,
+        y: cy - (cy - p.y) * effectiveFactor,
+      }));
+      return newZoom;
+    });
   };
 
   // ---------------- display box for overlay svgs ----------------
@@ -268,10 +322,11 @@ export function CanvasArea() {
   return (
     <div
       className={cn(
-        "relative flex flex-1 flex-col overflow-hidden bg-[oklch(0.18_0_0)] dark:bg-[oklch(0.12_0_0)]",
+        "relative flex flex-1 flex-col overflow-hidden select-none bg-[oklch(0.18_0_0)] dark:bg-[oklch(0.12_0_0)]",
         cursorClass,
       )}
       onDoubleClick={handleDoubleClick}
+      onWheel={handleWheel}
       onPointerCancel={finishStroke}
       onPointerDown={handlePointerDown}
       onPointerLeave={() => setPointer(null)}
@@ -280,7 +335,10 @@ export function CanvasArea() {
       ref={containerRef}
     >
       {image?.previewPng ? (
-        <>
+        <div
+          className="absolute inset-0 origin-top-left"
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}
+        >
           <img
             alt="image"
             className="pointer-events-none absolute inset-0 h-full w-full object-contain"
@@ -318,8 +376,8 @@ export function CanvasArea() {
             >
               {/* In-flight stroke preview */}
               {livePath.length > 1 && (
-                <polyline
-                  fill="none"
+                <polygon
+                  fill="rgba(255,210,80,0.3)"
                   points={livePath.map((p) => `${p.x},${p.y}`).join(" ")}
                   stroke="rgb(255,210,80)"
                   strokeLinecap="round"
@@ -386,7 +444,7 @@ export function CanvasArea() {
               )}
             </svg>
           )}
-        </>
+        </div>
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           <div className="rounded-md border border-white/10 bg-[oklch(0.22_0_0)] p-8 text-center font-mono text-white/40 text-xs">
@@ -396,19 +454,19 @@ export function CanvasArea() {
       )}
 
       {/* HUD */}
-      <div className="pointer-events-none absolute top-3 left-3 rounded-md bg-black/40 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
+      <div className="pointer-events-none select-none absolute top-3 left-3 rounded-md bg-black/40 px-2 py-1 text-[11px] font-medium tracking-wide text-white/80 backdrop-blur-sm shadow-sm">
         {image
           ? `${image.path.split(/[\\/]/).pop()} · Z 1/${image.depth} · ${image.channels}ch`
           : "no image loaded"}
       </div>
-      <div className="pointer-events-none absolute right-3 bottom-3 rounded-md bg-black/40 px-2 py-1 font-mono text-[10px] text-white/80 backdrop-blur-sm">
+      <div className="pointer-events-none select-none absolute right-3 bottom-3 rounded-md bg-black/40 px-2 py-1 text-[11px] font-medium tracking-wide text-white/80 backdrop-blur-sm shadow-sm">
         {mask ? `${mask.nRois} ROIs` : "no masks"}
         {pointer ? ` · x ${pointer.x.toFixed(0)} y ${pointer.y.toFixed(0)}` : ""}
       </div>
 
       {/* Pending merge banner */}
       {pendingMerge && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-2 py-1 font-mono text-[11px] text-white/90 backdrop-blur-sm">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 rounded-md bg-black/50 px-3 py-1 text-xs font-medium tracking-wide text-white/90 backdrop-blur-sm shadow-sm border border-white/10">
           Alt+click another cell to merge · Esc to cancel
         </div>
       )}
@@ -451,8 +509,8 @@ function SelectionCommitBar({
       : `${regionVertices} vertices · double-click to close`;
 
   return (
-    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 text-[11px] text-white/90 backdrop-blur-sm">
-      <span className="font-mono">{label}</span>
+    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-2 rounded-full border border-border/50 bg-background/80 px-4 py-1.5 text-xs font-medium text-foreground shadow-lg backdrop-blur-md">
+      <span className="tracking-wide">{label}</span>
       <Button
         className="h-6"
         disabled={!ready}

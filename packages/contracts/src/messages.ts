@@ -9,10 +9,14 @@ export const MessageTypeSchema = z.enum([
   "fs:list_roots",
   "fs:list_dir",
   "fs:home",
+  "fs:suggest_series_templates",
+  "fs:load_series_dataset",
   // Filesystem (server → client)
   "fs:roots_listed",
   "fs:dir_listed",
   "fs:home_resolved",
+  "fs:series_templates_suggested",
+  "fs:series_dataset_loaded",
 
   // Image IO (client → server)
   "image:open",
@@ -101,6 +105,18 @@ export const HomeResolvedPayload = z.object({
 });
 export type HomeResolvedPayload = z.infer<typeof HomeResolvedPayload>;
 
+export const SuggestSeriesTemplatesPayload = z.object({
+  folder: z.string(),
+});
+export type SuggestSeriesTemplatesPayload = z.infer<typeof SuggestSeriesTemplatesPayload>;
+
+export const LoadSeriesDatasetPayload = z.object({
+  folder: z.string(),
+  subfolder_template: z.string().optional(),
+  filename_template: z.string().optional(),
+});
+export type LoadSeriesDatasetPayload = z.infer<typeof LoadSeriesDatasetPayload>;
+
 // ---------------------------------------------------------------------------
 // Images
 // ---------------------------------------------------------------------------
@@ -161,7 +177,6 @@ export const RemoveAtPayload = z.object({
   y: z.number(),
 });
 export type RemoveAtPayload = z.infer<typeof RemoveAtPayload>;
-
 export const MaskStateSchema = z.object({
   width: z.number().int().positive(),
   height: z.number().int().positive(),
@@ -172,20 +187,6 @@ export const MaskStateSchema = z.object({
   canRedo: z.boolean(),
 });
 export type MaskState = z.infer<typeof MaskStateSchema>;
-
-// Streaming strokes — begin opens a new ROI label and snapshots history; append
-// adds segments without snapshotting; end finalises. erase mode paints 0.
-export const StrokeBeginPayload = z.object({
-  point: PointSchema,
-  radius: z.number().int().positive(),
-  erase: z.boolean().optional(),
-});
-export type StrokeBeginPayload = z.infer<typeof StrokeBeginPayload>;
-
-export const StrokeAppendPayload = z.object({
-  points: z.array(PointSchema).min(1),
-});
-export type StrokeAppendPayload = z.infer<typeof StrokeAppendPayload>;
 
 // Batch delete via a list of clicked pixels (one undo step for all).
 export const RemoveAtPointsPayload = z.object({
@@ -272,6 +273,8 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fs:list_roots") }),
   z.object({ type: z.literal("fs:list_dir"), payload: ListDirPayload }),
   z.object({ type: z.literal("fs:home") }),
+  z.object({ type: z.literal("fs:suggest_series_templates"), payload: SuggestSeriesTemplatesPayload }),
+  z.object({ type: z.literal("fs:load_series_dataset"), payload: LoadSeriesDatasetPayload }),
   // image
   z.object({ type: z.literal("image:open"), payload: OpenImagePayload }),
   z.object({ type: z.literal("image:open_masks"), payload: OpenMasksPayload }),
@@ -282,9 +285,6 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("image:save_seg"), payload: SavePathPayload }),
   // mask edits
   z.object({ type: z.literal("mask:stroke"), payload: StrokePayload }),
-  z.object({ type: z.literal("mask:stroke_begin"), payload: StrokeBeginPayload }),
-  z.object({ type: z.literal("mask:stroke_append"), payload: StrokeAppendPayload }),
-  z.object({ type: z.literal("mask:stroke_end") }),
   z.object({ type: z.literal("mask:remove_at"), payload: RemoveAtPayload }),
   z.object({ type: z.literal("mask:remove_at_points"), payload: RemoveAtPointsPayload }),
   z.object({ type: z.literal("mask:remove_in_region"), payload: RemoveInRegionPayload }),
@@ -308,6 +308,8 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("fs:roots_listed"), payload: RootsListedPayload }),
   z.object({ type: z.literal("fs:dir_listed"), payload: DirListedPayload }),
   z.object({ type: z.literal("fs:home_resolved"), payload: HomeResolvedPayload }),
+  z.object({ type: z.literal("fs:series_templates_suggested"), payload: z.any() }),
+  z.object({ type: z.literal("fs:series_dataset_loaded"), payload: z.any() }),
   // image
   z.object({ type: z.literal("image:opened"), payload: ImageMetaSchema }),
   z.object({ type: z.literal("image:saved"), payload: SavedPayload }),

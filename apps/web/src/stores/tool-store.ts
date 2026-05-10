@@ -24,6 +24,10 @@ interface ToolState {
   // Region-select mode: polygon vertices currently being drawn.
   regionPath: Point[];
 
+  // Viewport transform
+  zoom: number;
+  pan: Point;
+
   setTool: (tool: Tool) => void;
   setBrushSize: (n: number) => void;
   toggleMasks: () => void;
@@ -38,6 +42,10 @@ interface ToolState {
 
   addRegionVertex: (p: Point) => void;
   clearRegion: () => void;
+
+  setZoom: (z: number | ((prev: number) => number)) => void;
+  setPan: (p: Point | ((prev: Point) => Point)) => void;
+  resetView: () => void;
 }
 
 export const useToolStore = create<ToolState>((set) => ({
@@ -49,6 +57,9 @@ export const useToolStore = create<ToolState>((set) => ({
   pendingMerge: null,
   pickedPoints: [],
   regionPath: [],
+
+  zoom: 1,
+  pan: { x: 0, y: 0 },
 
   setTool: (tool) =>
     set({
@@ -73,4 +84,10 @@ export const useToolStore = create<ToolState>((set) => ({
   addRegionVertex: (p) =>
     set((s) => ({ regionPath: [...s.regionPath, p] })),
   clearRegion: () => set({ regionPath: [] }),
+
+  setZoom: (z) =>
+    set((s) => ({ zoom: typeof z === "function" ? z(s.zoom) : z })),
+  setPan: (p) =>
+    set((s) => ({ pan: typeof p === "function" ? p(s.pan) : p })),
+  resetView: () => set({ zoom: 1, pan: { x: 0, y: 0 } }),
 }));

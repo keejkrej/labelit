@@ -35,8 +35,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     setHome,
     setError: setFsError,
     setLoading: setFsLoading,
+    setSuggestedTemplates,
   } = useFsStore();
-  const { setImage, setMask, setModels, setProgress, setRunDone } = useSessionStore();
+  const { setImage, setMask, setModels, setProgress, setRunDone, setSeriesDataset } = useSessionStore();
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -57,6 +58,19 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           break;
         case "fs:home_resolved":
           setHome(msg.payload.path);
+          break;
+        case "fs:series_templates_suggested":
+          setSuggestedTemplates(msg.payload);
+          break;
+        case "fs:series_dataset_loaded":
+          setSeriesDataset(msg.payload);
+          if (msg.payload.records && msg.payload.records.length > 0) {
+            // we could emit 'image:open' here to load the first image, but actually
+            // we have to use wsRef to send the message.
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: "image:open", payload: { path: msg.payload.records[0].path } }));
+            }
+          }
           break;
         case "image:opened":
           setImage(msg.payload);

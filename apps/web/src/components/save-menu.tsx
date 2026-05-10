@@ -26,19 +26,19 @@ export function SaveMenuItems() {
   return (
     <>
       <MenuItem disabled={disabled} onClick={saveSeg}>
-        Save _seg.npy <MenuShortcut>Ctrl+S</MenuShortcut>
+        Save masks and image (as *_seg.npy) <MenuShortcut>Ctrl+S</MenuShortcut>
       </MenuItem>
       <MenuItem disabled={disabled} onClick={saveMasksPng}>
-        Save masks PNG/tif <MenuShortcut>Ctrl+N</MenuShortcut>
+        Save masks as PNG/tif <MenuShortcut>Ctrl+N</MenuShortcut>
       </MenuItem>
       <MenuItem disabled={disabled} onClick={saveOutlines}>
-        Save outlines text <MenuShortcut>Ctrl+O</MenuShortcut>
+        Save Outlines as text for imageJ <MenuShortcut>Ctrl+O</MenuShortcut>
       </MenuItem>
       <MenuItem disabled={disabled} onClick={saveRois}>
-        Save ROIs zip (ImageJ) <MenuShortcut>Ctrl+R</MenuShortcut>
+        Save outlines as .zip archive of ROI files for ImageJ <MenuShortcut>Ctrl+R</MenuShortcut>
       </MenuItem>
       <MenuItem disabled={disabled} onClick={saveFlows}>
-        Save flows tif <MenuShortcut>Ctrl+F</MenuShortcut>
+        Save Flows and cellprob as tif <MenuShortcut>Ctrl+F</MenuShortcut>
       </MenuItem>
     </>
   );

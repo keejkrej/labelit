@@ -35,11 +35,11 @@ class MaskHistory:
 
 @dataclass
 class StrokeSession:
-    """In-flight streaming stroke: one ROI label, single history snapshot at begin."""
     label: int
     radius: int
     erase: bool
     last_point: tuple[int, int]
+    points: list[tuple[int, int]]
 
 
 _history: dict[str, MaskHistory] = {}
@@ -188,7 +188,7 @@ def stroke(points: list[dict], radius: int, erase: bool = False) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def stroke_begin(point: dict, radius: int, erase: bool = False) -> dict:
+def stroke_begin(point: dict, radius: int, erase: bool = False) -> None:
     loaded = images.get()
     if loaded is None:
         raise RuntimeError("No image loaded.")
@@ -198,12 +198,11 @@ def stroke_begin(point: dict, radius: int, erase: bool = False) -> dict:
     p = (int(round(point["x"])), int(round(point["y"])))
     cv2.circle(mask, p, radius, color=label, thickness=-1)
     _active_stroke[loaded.path] = StrokeSession(
-        label=label, radius=radius, erase=erase, last_point=p
+        label=label, radius=radius, erase=erase, last_point=p, points=[p]
     )
-    return _state(loaded)
 
 
-def stroke_append(points: list[dict]) -> dict:
+def stroke_append(points: list[dict]) -> dict | None:
     loaded = images.get()
     if loaded is None:
         raise RuntimeError("No image loaded.")
@@ -216,16 +215,22 @@ def stroke_append(points: list[dict]) -> dict:
     for p in points:
         cur = (int(round(p["x"])), int(round(p["y"])))
         _paint_segment(mask, last, cur, session.label, session.radius)
+        session.points.append(cur)
         last = cur
     session.last_point = last
-    return _state(loaded)
+    return None
 
 
 def stroke_end() -> dict:
     loaded = images.get()
     if loaded is None:
         raise RuntimeError("No image loaded.")
-    _active_stroke.pop(loaded.path, None)
+    session = _active_stroke.pop(loaded.path, None)
+    if session is not None and len(session.points) > 2:
+        mask = _ensure_mask(loaded)
+        poly = np.array(session.points, dtype=np.int32)
+        color = 0 if session.erase else session.label
+        cv2.fillPoly(mask, [poly], color=color)
     return _state(loaded)
 
 

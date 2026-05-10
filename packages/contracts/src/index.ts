@@ -25,8 +25,6 @@ export {
   PointSchema,
   type Point,
   StrokePayload,
-  StrokeBeginPayload,
-  StrokeAppendPayload,
   RemoveAtPayload,
   RemoveAtPointsPayload,
   RemoveInRegionPayload,
