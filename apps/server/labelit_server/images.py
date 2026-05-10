@@ -111,6 +111,22 @@ def open_image(path: str) -> dict:
         depth=z,
         dtype=str(arr.dtype),
     )
+    
+    # Auto-load cellpose _seg.npy if present
+    seg_path = os.path.splitext(abs_path)[0] + "_seg.npy"
+    if os.path.isfile(seg_path):
+        try:
+            data = np.load(seg_path, allow_pickle=True)
+            if isinstance(data, np.ndarray) and data.dtype == object:
+                data = data.item()
+            if isinstance(data, dict):
+                if "masks" in data:
+                    loaded.masks = data["masks"]
+                if "flows" in data:
+                    loaded.flows = data["flows"]
+        except Exception as e:
+            print(f"Failed to auto-load {seg_path}: {e}")
+
     _cache[abs_path] = loaded
     _current_path = abs_path
     return {

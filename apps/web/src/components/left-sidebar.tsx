@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -33,6 +34,12 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
   const currentValStr = coords[id];
   let currentIndex = values.indexOf(currentValStr);
   if (currentIndex === -1) currentIndex = 0;
+
+  const [localIndex, setLocalIndex] = useState(currentIndex);
+
+  useEffect(() => {
+    setLocalIndex(currentIndex);
+  }, [currentIndex]);
 
   const setValue = (newIndex: number) => {
     if (newIndex < 0 || newIndex > max || !dataset) return;
@@ -77,8 +84,9 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
         className="min-w-0 flex-1 [&_[data-slot=slider-control]]:min-w-0"
         max={max === 0 ? 1 : max}
         disabled={max === 0}
-        onValueChange={(v) => setValue(Array.isArray(v) ? v[0] : v)}
-        value={currentIndex}
+        onValueChange={(v) => setLocalIndex(Array.isArray(v) ? v[0] : v)}
+        onValueCommitted={(v) => setValue(Array.isArray(v) ? v[0] : v)}
+        value={localIndex}
       />
       <Button
         aria-label={`Next ${label}`}
@@ -90,7 +98,7 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
         <ChevronRight />
       </Button>
       <span className="w-10 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-        {values[currentIndex] ?? 0}
+        {values[localIndex] ?? 0}
       </span>
     </div>
   );
