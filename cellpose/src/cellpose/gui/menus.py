@@ -14,6 +14,11 @@ def mainmenu(parent):
     loadImg.triggered.connect(lambda: io._load_image(parent))
     file_menu.addAction(loadImg)
 
+    loadFolderPattern = QAction("Load &folder with pattern...", parent)
+    loadFolderPattern.setShortcut("Ctrl+Shift+L")
+    loadFolderPattern.triggered.connect(lambda: io._load_image_series(parent))
+    file_menu.addAction(loadFolderPattern)
+
     parent.autoloadMasks = QAction("Autoload masks from _masks.tif file", parent,
                                    checkable=True)
     parent.autoloadMasks.setChecked(False)

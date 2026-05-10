@@ -11,61 +11,61 @@ import pathlib, os
 
 def stylesheet():
     return """
-        QToolTip { 
-                            background-color: black; 
-                            color: white; 
-                            border: black solid 1px
-                            }
-        QComboBox {color: white;
-                    background-color: rgb(40,40,40);}
-                    QComboBox::item:enabled { color: white;
-                    background-color: rgb(40,40,40);
-                    selection-color: white;
-                    selection-background-color: rgb(50,100,50);}
-                    QComboBox::item:!enabled {
-                            background-color: rgb(40,40,40);
-                            color: rgb(100,100,100);
-                        }
-        QScrollArea > QWidget > QWidget
-                {
-                    background: transparent;
-                    border: none;
-                    margin: 0px 0px 0px 0px;
-                } 
+        # QToolTip { 
+        #                     background-color: black; 
+        #                     color: white; 
+        #                     border: black solid 1px
+        #                     }
+        # QComboBox {color: white;
+        #             background-color: rgb(40,40,40);}
+        #             QComboBox::item:enabled { color: white;
+        #             background-color: rgb(40,40,40);
+        #             selection-color: white;
+        #             selection-background-color: rgb(50,100,50);}
+        #             QComboBox::item:!enabled {
+        #                     background-color: rgb(40,40,40);
+        #                     color: rgb(100,100,100);
+        #                 }
+        # QScrollArea > QWidget > QWidget
+        #         {
+        #             background: transparent;
+        #             border: none;
+        #             margin: 0px 0px 0px 0px;
+        #         } 
                            
-        QGroupBox 
-            { border: 1px solid white; color: rgb(255,255,255);
-                           border-radius: 6px;
-                            margin-top: 8px;
-                            padding: 0px 0px;}            
+        # QGroupBox 
+        #     { border: 1px solid white; color: rgb(255,255,255);
+        #                    border-radius: 6px;
+        #                     margin-top: 8px;
+        #                     padding: 0px 0px;}            
                            
-        QPushButton:pressed {Text-align: center; 
-                             background-color: rgb(150,50,150); 
-                             border-color: white;
-                             color:white;}
-                            QToolTip { 
-                           background-color: black; 
-                           color: white; 
-                           border: black solid 1px
-                           }
-        QPushButton:!pressed {Text-align: center; 
-                               background-color: rgb(50,50,50);
-                                border-color: white;
-                               color:white;}
-                                QToolTip { 
-                           background-color: black; 
-                           color: white; 
-                           border: black solid 1px
-                           }
-        QPushButton:disabled {Text-align: center; 
-                             background-color: rgb(30,30,30);
-                             border-color: white;
-                              color:rgb(80,80,80);}
-                               QToolTip { 
-                           background-color: black; 
-                           color: white; 
-                           border: black solid 1px
-                           }
+        # QPushButton:pressed {Text-align: center; 
+        #                      background-color: rgb(150,50,150); 
+        #                      border-color: white;
+        #                      color:white;}
+        #                     QToolTip { 
+        #                    background-color: black; 
+        #                    color: white; 
+        #                    border: black solid 1px
+        #                    }
+        # QPushButton:!pressed {Text-align: center; 
+        #                        background-color: rgb(50,50,50);
+        #                         border-color: white;
+        #                        color:white;}
+        #                         QToolTip { 
+        #                    background-color: black; 
+        #                    color: white; 
+        #                    border: black solid 1px
+        #                    }
+        # QPushButton:disabled {Text-align: center; 
+        #                      background-color: rgb(30,30,30);
+        #                      border-color: white;
+        #                       color:rgb(80,80,80);}
+        #                        QToolTip { 
+        #                    background-color: black; 
+        #                    color: white; 
+        #                    border: black solid 1px
+        #                    }
                         
         """
 

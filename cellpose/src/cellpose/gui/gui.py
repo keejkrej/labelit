@@ -6,8 +6,8 @@ import sys, os, pathlib, warnings, datetime, time, copy
 
 from qtpy import QtGui, QtCore
 from superqt import QRangeSlider, QCollapsible
-from qtpy.QtWidgets import QScrollArea, QMainWindow, QApplication, QWidget, QScrollBar, \
-    QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, \
+from qtpy.QtWidgets import QMainWindow, QApplication, QWidget, \
+    QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QSlider, \
         QLineEdit, QMessageBox, QGroupBox, QMenu, QAction
 import pyqtgraph as pg
 
@@ -15,7 +15,7 @@ import numpy as np
 from scipy.stats import mode
 import cv2
 
-from . import guiparts, menus, io
+from . import guiparts, menus, io, series
 from .. import models, core, dynamics, version, train
 from ..utils import download_url_to_file, masks_to_outlines, diameters
 from ..io import get_image_files, imsave, imread
@@ -56,6 +56,25 @@ class QHLine(QFrame):
         super(QHLine, self).__init__()
         self.setFrameShape(QFrame.HLine)
         self.setLineWidth(8)
+
+
+class SeriesAxisSlider(QSlider):
+
+    keyboardRelease = QtCore.Signal()
+
+    def keyReleaseEvent(self, event):
+        super().keyReleaseEvent(event)
+        if event.isAutoRepeat():
+            return
+        if event.key() in [
+            QtCore.Qt.Key_Left,
+            QtCore.Qt.Key_Right,
+            QtCore.Qt.Key_PageUp,
+            QtCore.Qt.Key_PageDown,
+            QtCore.Qt.Key_Home,
+            QtCore.Qt.Key_End,
+        ]:
+            self.keyboardRelease.emit()
 
 
 def make_bwr():
@@ -178,7 +197,7 @@ class MainW(QMainWindow):
 
         self.logger = logger
         pg.setConfigOptions(imageAxisOrder="row-major")
-        self.setGeometry(50, 50, 1200, 1000)
+        self.setGeometry(100, 100, 1280, 720)
         self.setWindowTitle(f"cellpose v{version}")
         self.cp_path = os.path.dirname(os.path.realpath(__file__))
         app_icon = QtGui.QIcon()
@@ -228,16 +247,15 @@ class MainW(QMainWindow):
         self.lmain.setContentsMargins(0, 0, 0, 10)
 
         self.imask = 0
-        self.scrollarea = QScrollArea()
-        self.scrollarea.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
-        self.scrollarea.setStyleSheet("""QScrollArea { border: none }""")
-        self.scrollarea.setWidgetResizable(True)
-        self.swidget = QWidget(self)
-        self.scrollarea.setWidget(self.swidget)
-        self.l0 = QGridLayout()
-        self.swidget.setLayout(self.l0)
+        self.left_sidebar = QGridLayout()
+        self.left_sidebar_widget = QWidget(self)
+        self.left_sidebar_widget.setLayout(self.left_sidebar)
+        self.right_sidebar = QGridLayout()
+        self.right_sidebar_widget = QWidget(self)
+        self.right_sidebar_widget.setLayout(self.right_sidebar)
         b = self.make_buttons()
-        self.lmain.addWidget(self.scrollarea, 0, 0, 39, 9)
+        self.lmain.addWidget(self.left_sidebar_widget, 0, 0, 39, 9)
+        self.lmain.addWidget(self.right_sidebar_widget, 0, 39, 39, 9)
 
         # ---- drawing area ---- #
         self.win = pg.GraphicsLayoutWidget()
@@ -271,6 +289,12 @@ class MainW(QMainWindow):
         self.NZ = 1
         self.restore = None
         self.ratio = 1.
+        self.series_dataset = None
+        self.series_index = None
+        self.output_filename = None
+        self.display_filename = None
+        self.last_series_subfolder_template = ""
+        self.last_series_filename_template = ""
         self.reset()
 
         # This needs to go after .reset() is called to get state fully set up:
@@ -321,11 +345,69 @@ class MainW(QMainWindow):
         self.smallfont = QtGui.QFont("Arial", 8)
 
         b = 0
+        self.navBox = QGroupBox("Navigation")
+        self.navBox.setFont(self.boldfont)
+        self.navBoxG = QGridLayout()
+        self.navBox.setLayout(self.navBoxG)
+        self.left_sidebar.addWidget(self.navBox, b, 0, 1, 9)
+        self.series_nav_controls = {}
+        axis_labels = {
+            "position": "P",
+            "time": "T",
+            "channel": "C",
+            "z": "Z",
+        }
+        for column, axis_name in enumerate(series.SERIES_AXES):
+            row = column
+            label = QLabel(axis_labels[axis_name])
+            label.setFont(self.medfont)
+            self.navBoxG.addWidget(label, row, 0, 1, 1)
+
+            prev_btn = QPushButton("<")
+            prev_btn.setFixedWidth(28)
+            prev_btn.setEnabled(False)
+            prev_btn.clicked.connect(
+                lambda _checked=False, axis_name=axis_name: self.navigate_series_from_sliders(
+                    axis_name, -1
+                )
+            )
+            self.navBoxG.addWidget(prev_btn, row, 1, 1, 1)
+
+            slider = SeriesAxisSlider(QtCore.Qt.Orientation.Horizontal, self)
+            slider.setRange(0, 0)
+            slider.setEnabled(False)
+            slider.setTracking(True)
+            slider.sliderReleased.connect(
+                lambda axis_name=axis_name: self._commit_series_slider(axis_name)
+            )
+            slider.keyboardRelease.connect(
+                lambda axis_name=axis_name: self._commit_series_slider(axis_name)
+            )
+            self.navBoxG.addWidget(slider, row, 2, 1, 1)
+
+            next_btn = QPushButton(">")
+            next_btn.setFixedWidth(28)
+            next_btn.setEnabled(False)
+            next_btn.clicked.connect(
+                lambda _checked=False, axis_name=axis_name: self.navigate_series_from_sliders(
+                    axis_name, +1
+                )
+            )
+            self.navBoxG.addWidget(next_btn, row, 3, 1, 1)
+
+            self.series_nav_controls[axis_name] = {
+                "slider": slider,
+                "prev_btn": prev_btn,
+                "next_btn": next_btn
+            }
+        self.navBox.setEnabled(False)
+
+        b += 1
         self.satBox = QGroupBox("Views")
         self.satBox.setFont(self.boldfont)
         self.satBoxG = QGridLayout()
         self.satBox.setLayout(self.satBoxG)
-        self.l0.addWidget(self.satBox, b, 0, 1, 9)
+        self.left_sidebar.addWidget(self.satBox, b, 0, 1, 9)
 
         widget_row = 0
         self.view = 0  # 0=image, 1=flowsXY, 2=flowsZ, 3=cellprob
@@ -397,7 +479,7 @@ class MainW(QMainWindow):
         self.drawBox.setFont(self.boldfont)
         self.drawBoxG = QGridLayout()
         self.drawBox.setLayout(self.drawBoxG)
-        self.l0.addWidget(self.drawBox, b, 0, 1, 9)
+        self.left_sidebar.addWidget(self.drawBox, b, 0, 1, 9)
         self.autosave = True
 
         widget_row = 0
@@ -473,7 +555,7 @@ class MainW(QMainWindow):
         self.segBox = QGroupBox("Segmentation")
         self.segBoxG = QGridLayout()
         self.segBox.setLayout(self.segBoxG)
-        self.l0.addWidget(self.segBox, b, 0, 1, 9)
+        self.right_sidebar.addWidget(self.segBox, 0, 0, 1, 1)
         self.segBox.setFont(self.boldfont)
 
         widget_row += 1
@@ -535,11 +617,11 @@ class MainW(QMainWindow):
         self.additional_seg_settings_qcollapsible._toggle_btn.setChecked(True)
         self.additional_seg_settings_qcollapsible._toggle_btn.setChecked(False)
 
-        b += 1
+        # user-trained models in the right sidebar
         self.modelBox = QGroupBox("user-trained models")
         self.modelBoxG = QGridLayout()
         self.modelBox.setLayout(self.modelBoxG)
-        self.l0.addWidget(self.modelBox, b, 0, 1, 9)
+        self.right_sidebar.addWidget(self.modelBox, 1, 0, 1, 1)
         self.modelBox.setFont(self.boldfont)
         # choose models
         self.ModelChooseC = QComboBox()
@@ -565,12 +647,11 @@ class MainW(QMainWindow):
         self.ModelButtonC.setEnabled(False)
 
 
-        b += 1
         self.filterBox = QGroupBox("Image filtering")
         self.filterBox.setFont(self.boldfont)
         self.filterBox_grid_layout = QGridLayout()
         self.filterBox.setLayout(self.filterBox_grid_layout)
-        self.l0.addWidget(self.filterBox, b, 0, 1, 9)
+        self.right_sidebar.addWidget(self.filterBox, 2, 0, 1, 1)
 
         widget_row = 0
         
@@ -863,7 +944,118 @@ class MainW(QMainWindow):
     def undo_remove_action(self):
         self.undo_remove_cell()
 
+    def set_series_navigation_state(self, dataset=None, record_index=None):
+        self._updating_series_navigation = True
+        try:
+            enabled = dataset is not None and record_index is not None
+            self.navBox.setEnabled(enabled)
+            for axis_name, control in self.series_nav_controls.items():
+                slider = control["slider"]
+                prev_btn = control["prev_btn"]
+                next_btn = control["next_btn"]
+                if not enabled:
+                    slider.setRange(0, 0)
+                    slider.setValue(0)
+                    slider.setEnabled(False)
+                    prev_btn.setEnabled(False)
+                    next_btn.setEnabled(False)
+                    continue
+
+                axis_values = dataset["axes"][axis_name]
+                slider.setEnabled(True)
+                slider.setRange(0, max(0, len(axis_values) - 1))
+                slider.setValue(
+                    dataset["axis_index"][axis_name][
+                        dataset["records"][record_index][axis_name]
+                    ]
+                )
+                prev_btn.setEnabled(slider.maximum() > 0)
+                next_btn.setEnabled(slider.maximum() > 0)
+        finally:
+            self._updating_series_navigation = False
+
+    def _commit_series_slider(self, axis_name=None):
+        if (
+            self._updating_series_navigation
+            or self.series_dataset is None
+            or self.series_index is None
+        ):
+            return
+        if axis_name is None:
+            return
+        control = self.series_nav_controls.get(axis_name)
+        if control is None:
+            return
+        self.navigate_series_from_sliders(axis_name)
+
+    def navigate_series_from_sliders(self, axis_name=None, delta=0):
+        if delta != 0:
+            control = self.series_nav_controls.get(axis_name)
+            if control is None:
+                return
+            slider = control["slider"]
+            if not slider.isEnabled():
+                return
+            value = max(0, min(slider.maximum(), slider.value() + delta))
+            old_updating_state = self._updating_series_navigation
+            self._updating_series_navigation = True
+            try:
+                slider.setValue(value)
+            finally:
+                self._updating_series_navigation = old_updating_state
+
+        if (
+            self._updating_series_navigation
+            or self.series_dataset is None
+            or self.series_index is None
+        ):
+            return
+
+        if axis_name is None:
+            return
+
+        try:
+            record_index = series.resolve_series_record_index(
+                self.series_dataset,
+                position=self.series_dataset["axes"]["position"][
+                    self.series_nav_controls["position"]["slider"].value()
+                ],  # Use value() with tracking enabled.
+                time=self.series_dataset["axes"]["time"][
+                    self.series_nav_controls["time"]["slider"].value()
+                ],  # Use value() with tracking enabled.
+                channel=self.series_dataset["axes"]["channel"][
+                    self.series_nav_controls["channel"]["slider"].value()
+                ],  # Use value() with tracking enabled.
+                z=self.series_dataset["axes"]["z"][
+                    self.series_nav_controls["z"]["slider"].value()
+                ],  # Use value() with tracking enabled.
+            )
+        except Exception as e:
+            self.set_series_navigation_state(self.series_dataset, self.series_index)
+            QMessageBox.warning(self, "Load folder with pattern", str(e))
+            return
+
+        if record_index == self.series_index:
+            return
+
+        try:
+            io._load_series_item(
+                self,
+                self.series_dataset,
+                record_index,
+                load_3D=self.load_3D,
+            )
+        except Exception as e:
+            self.set_series_navigation_state(self.series_dataset, self.series_index)
+            print(f"ERROR: {e}")
+            QMessageBox.warning(self, "Load folder with pattern", str(e))
+
     def get_files(self):
+        if self.series_dataset is not None and self.series_index is not None:
+            return (
+                [record["path"] for record in self.series_dataset["records"]],
+                self.series_index,
+            )
         folder = os.path.dirname(self.filename)
         mask_filter = "_masks"
         images = get_image_files(folder, mask_filter)
@@ -875,12 +1067,32 @@ class MainW(QMainWindow):
     def get_prev_image(self):
         images, idx = self.get_files()
         idx = (idx - 1) % len(images)
-        io._load_image(self, filename=images[idx])
+        if self.series_dataset is not None:
+            try:
+                io._load_series_item(self, self.series_dataset, idx, load_3D=self.load_3D)
+            except Exception as e:
+                print(f"ERROR: {e}")
+                QMessageBox.warning(self, "Load folder with pattern", str(e))
+        else:
+            io._load_image(self, filename=images[idx])
 
     def get_next_image(self, load_seg=True):
         images, idx = self.get_files()
         idx = (idx + 1) % len(images)
-        io._load_image(self, filename=images[idx], load_seg=load_seg)
+        if self.series_dataset is not None:
+            try:
+                io._load_series_item(
+                    self,
+                    self.series_dataset,
+                    idx,
+                    load_seg=load_seg,
+                    load_3D=self.load_3D,
+                )
+            except Exception as e:
+                print(f"ERROR: {e}")
+                QMessageBox.warning(self, "Load folder with pattern", str(e))
+        else:
+            io._load_image(self, filename=images[idx], load_seg=load_seg)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -990,6 +1202,8 @@ class MainW(QMainWindow):
         self.clear_all()
 
         self.filename = []
+        self.output_filename = None
+        self.display_filename = None
         self.loaded = False
         self.recompute_masks = False
 

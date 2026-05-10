@@ -12,7 +12,16 @@ from ..utils import masks_to_outlines, outlines_list
 
 try:
     import qtpy
-    from qtpy.QtWidgets import QFileDialog
+    from qtpy.QtWidgets import (
+        QDialog,
+        QDialogButtonBox,
+        QFileDialog,
+        QFormLayout,
+        QLabel,
+        QLineEdit,
+        QMessageBox,
+        QVBoxLayout,
+    )
     GUI = True
 except:
     GUI = False
@@ -22,6 +31,9 @@ try:
     MATPLOTLIB = True
 except:
     MATPLOTLIB = False
+
+
+from . import series
 
 
 def _init_model_list(parent):
@@ -98,6 +110,117 @@ def _get_train_set(image_names):
     return train_data, train_labels, train_files, restore, normalize_params
 
 
+def _clear_series_state(parent):
+    parent.series_dataset = None
+    parent.series_index = None
+    parent.output_filename = None
+    parent.display_filename = None
+    if hasattr(parent, "set_series_navigation_state"):
+        parent.set_series_navigation_state()
+
+
+def _set_series_state(parent, dataset=None, item_index=None):
+    parent.series_dataset = dataset
+    parent.series_index = item_index
+    if dataset is None or item_index is None:
+        parent.output_filename = None
+        if hasattr(parent, "set_series_navigation_state"):
+            parent.set_series_navigation_state()
+        return
+
+    item = dataset["records"][item_index]
+    parent.output_filename = series.get_output_filename(dataset, item_index)
+    parent.display_filename = item["label"]
+    parent.filename = item["path"]
+    if hasattr(parent, "set_series_navigation_state"):
+        parent.set_series_navigation_state(dataset, item_index)
+
+
+def _get_output_filename(parent):
+    return parent.output_filename if getattr(parent, "output_filename", None) else parent.filename
+
+
+def _prompt_series_templates(parent, folder):
+    suggestion = series.suggest_series_templates(folder)
+    subfolder_text = getattr(parent, "last_series_subfolder_template", "")
+    filename_text = getattr(parent, "last_series_filename_template", "")
+    if not subfolder_text:
+        subfolder_text = suggestion["subfolder_template"]
+    if not filename_text:
+        filename_text = suggestion["filename_template"]
+
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Load folder with pattern")
+    dialog.setMinimumWidth(500)
+
+    layout = QVBoxLayout(dialog)
+    info_label = QLabel(
+        "Use placeholders {t}, {p}, {c}, {z}. Subfolder matching is case-insensitive."
+    )
+    info_label.setWordWrap(True)
+    layout.addWidget(info_label)
+
+    form = QFormLayout()
+    subfolder_edit = QLineEdit(subfolder_text)
+    filename_edit = QLineEdit(filename_text)
+    form.addRow("Subfolder template:", subfolder_edit)
+    form.addRow("Filename template:", filename_edit)
+    layout.addLayout(form)
+
+    button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    button_box.accepted.connect(dialog.accept)
+    button_box.rejected.connect(dialog.reject)
+    layout.addWidget(button_box)
+
+    if dialog.exec_() != QDialog.Accepted:
+        return None
+
+    return subfolder_edit.text().strip(), filename_edit.text().strip()
+
+
+def _load_image_series(parent):
+    folder = QFileDialog.getExistingDirectory(parent, "Load image folder")
+    if folder == "":
+        return
+
+    templates = _prompt_series_templates(parent, folder)
+    if templates is None:
+        return
+
+    subfolder_template, filename_template = templates
+    if filename_template == "":
+        return
+
+    parent.last_series_subfolder_template = subfolder_template
+    parent.last_series_filename_template = filename_template
+
+    try:
+        dataset = series.build_series_dataset(
+            folder,
+            subfolder_template=subfolder_template,
+            filename_template=filename_template,
+        )
+        _load_series_item(parent, dataset, 0, load_seg=True, load_3D=parent.load_3D)
+    except Exception as e:
+        print(f"ERROR: {e}")
+        QMessageBox.warning(parent, "Load folder with pattern", str(e))
+
+
+def _load_series_item(parent, dataset, item_index, load_seg=True, load_3D=False):
+    output_filename = series.get_output_filename(dataset, item_index)
+    seg_filename = os.path.splitext(output_filename)[0] + "_seg.npy"
+    if load_seg and os.path.isfile(seg_filename):
+        _load_seg(parent, filename=seg_filename, load_3D=load_3D)
+        if getattr(parent, "series_dataset", None) is None:
+            _set_series_state(parent, dataset=dataset, item_index=item_index)
+        parent.setWindowTitle(parent.display_filename or parent.filename)
+        return
+
+    _load_image(parent, filename=output_filename, load_seg=False, load_3D=load_3D)
+    _set_series_state(parent, dataset=dataset, item_index=item_index)
+    parent.setWindowTitle(parent.display_filename or parent.filename)
+
+
 def _load_image(parent, filename=None, load_seg=True, load_3D=False):
     """ load image with filename; if None, open QFileDialog
     if image is grey change view to default to grey scale 
@@ -111,6 +234,7 @@ def _load_image(parent, filename=None, load_seg=True, load_3D=False):
         filename = name[0]
         if filename == "":
             return
+    _clear_series_state(parent)
     manual_file = os.path.splitext(filename)[0] + "_seg.npy"
     load_mask = False
     if load_seg:
@@ -144,6 +268,8 @@ def _load_image(parent, filename=None, load_seg=True, load_3D=False):
     if parent.loaded:
         parent.reset()
         parent.filename = filename
+        parent.display_filename = filename
+        parent.output_filename = None
         filename = os.path.split(parent.filename)[-1]
         _initialize_images(parent, image, load_3D=load_3D)
         parent.loaded = True
@@ -245,6 +371,17 @@ def _load_seg(parent, filename=None, image=None, image_file=None, load_3D=False)
         print("ERROR: not NPY")
         return
 
+    dataset = None
+    dataset_index = None
+    if image is None and "image_series" in dat:
+        try:
+            dataset, dataset_index = series.resolve_series_metadata(dat["image_series"])
+            image_file = dataset["records"][dataset_index]["path"]
+        except Exception as e:
+            print(f"ERROR: cannot reconstruct image series state, {e}")
+            dataset = None
+            dataset_index = None
+
     parent.reset()
     if image is None:
         found_image = False
@@ -278,6 +415,13 @@ def _load_seg(parent, filename=None, image=None, image_file=None, load_3D=False)
                 return
     else:
         parent.filename = image_file
+
+    if dataset is not None:
+        _set_series_state(parent, dataset=dataset, item_index=dataset_index)
+    else:
+        _clear_series_state(parent)
+        parent.output_filename = None
+        parent.display_filename = parent.filename
 
     parent.restore = None
     parent.ratio = 1.
@@ -488,7 +632,7 @@ def _masks_to_gui(parent, masks, outlines=None, colors=None):
 
 def _save_png(parent):
     """ save masks to png or tiff (if 3D) """
-    filename = parent.filename
+    filename = _get_output_filename(parent)
     base = os.path.splitext(filename)[0]
     if parent.NZ == 1:
         if parent.cellpix[0].max() > 65534:
@@ -504,7 +648,7 @@ def _save_png(parent):
 
 def _save_flows(parent):
     """ save flows and cellprob to tiff """
-    filename = parent.filename
+    filename = _get_output_filename(parent)
     base = os.path.splitext(filename)[0]
     print("GUI_INFO: saving flows and cellprob to tiff")
     if len(parent.flows) > 0:
@@ -520,7 +664,7 @@ def _save_flows(parent):
 
 def _save_rois(parent):
     """ save masks as rois in .zip file for ImageJ """
-    filename = parent.filename
+    filename = _get_output_filename(parent)
     if parent.NZ == 1:
         print(
             f"GUI_INFO: saving {parent.cellpix[0].max()} ImageJ ROIs to .zip archive.")
@@ -530,7 +674,7 @@ def _save_rois(parent):
 
 
 def _save_outlines(parent):
-    filename = parent.filename
+    filename = _get_output_filename(parent)
     base = os.path.splitext(filename)[0]
     if parent.NZ == 1:
         print(
@@ -553,7 +697,7 @@ def _save_sets(parent):
     """ save masks to *_seg.npy. This function should be used when saving
     is forced, e.g. when clicking the save button. Otherwise, use _save_sets_with_check
     """
-    filename = parent.filename
+    filename = _get_output_filename(parent)
     base = os.path.splitext(filename)[0]
     flow_threshold = parent.segmentation_settings.flow_threshold
     cellprob_threshold = parent.segmentation_settings.cellprob_threshold
@@ -627,6 +771,13 @@ def _save_sets(parent):
         }
         if parent.restore is not None:
             dat["img_restore"] = parent.stack_filtered
+    if (
+        getattr(parent, "series_dataset", None) is not None
+        and parent.series_index is not None
+    ):
+        dat["image_series"] = series.build_series_metadata(
+            parent.series_dataset, parent.series_index
+        )
     try:
         np.save(base + "_seg.npy", dat)
         print("GUI_INFO: %d ROIs saved to %s" % (parent.ncells.get(), base + "_seg.npy"))
