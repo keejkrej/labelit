@@ -118,10 +118,10 @@ export const OpenSeriesImagePayload = z.object({
   folder: z.string(),
   subfolder_template: z.string().optional(),
   filename_template: z.string().optional(),
-  position: z.string(),
-  time: z.string(),
-  channel: z.string(),
-  z: z.string(),
+  position: z.number(),
+  time: z.number(),
+  channel: z.number(),
+  z: z.number(),
 });
 export type OpenSeriesImagePayload = z.infer<typeof OpenSeriesImagePayload>;
 
@@ -322,7 +322,7 @@ export const SeriesDatasetPayloadSchema = z.object({
   subfolder_template: z.string(),
   filename_template: z.string(),
   placeholders: z.array(z.string()),
-  axes: z.record(z.string(), z.array(z.string())),
+  axes: z.record(z.string(), z.number()),
 });
 export type SeriesDatasetPayload = z.infer<typeof SeriesDatasetPayloadSchema>;
 

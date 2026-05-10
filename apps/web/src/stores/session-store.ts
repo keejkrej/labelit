@@ -7,7 +7,7 @@ export interface SeriesDataset {
   subfolder_template: string;
   filename_template: string;
   placeholders: string[];
-  axes: Record<string, string[]>;
+  axes: Record<string, number>;
 }
 
 interface SegmentationProgress {
@@ -47,7 +47,7 @@ interface SessionState {
   params: SegmentationParams;
 
   seriesDataset: SeriesDataset | null;
-  seriesCoordinates: Record<string, string>;
+  seriesCoordinates: Record<string, number>;
 
   setImage: (image: ImageMeta | null) => void;
   setMask: (mask: MaskState | null) => void;
@@ -56,8 +56,8 @@ interface SessionState {
   setRunDone: (segPath: string | null) => void;
   setParams: (patch: Partial<SegmentationParams>) => void;
 
-  setSeriesDataset: (dataset: SeriesDataset | null, coords?: Record<string, string>) => void;
-  setSeriesCoordinates: (coords: Record<string, string>) => void;
+  setSeriesDataset: (dataset: SeriesDataset | null, coords?: Record<string, number>) => void;
+  setSeriesCoordinates: (coords: Record<string, number>) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({

@@ -28,12 +28,11 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
   const setCoords = useSessionStore((s) => s.setSeriesCoordinates);
   const { send } = useWebSocket();
 
-  const values = dataset?.axes?.[id] || [];
-  const max = Math.max(0, values.length - 1);
+  const length = dataset?.axes?.[id] || 0;
+  const max = Math.max(0, length - 1);
   
-  const currentValStr = coords[id];
-  let currentIndex = values.indexOf(currentValStr);
-  if (currentIndex === -1) currentIndex = 0;
+  let currentIndex = coords[id] ?? 0;
+  if (currentIndex < 0 || currentIndex > max) currentIndex = 0;
 
   const [localIndex, setLocalIndex] = useState(currentIndex);
 
@@ -43,10 +42,9 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
 
   const setValue = (newIndex: number) => {
     if (newIndex < 0 || newIndex > max || !dataset) return;
-    const newVal = values[newIndex];
-    if (newVal === currentValStr) return;
+    if (newIndex === currentIndex) return;
 
-    const nextCoords = { ...coords, [id]: newVal };
+    const nextCoords = { ...coords, [id]: newIndex };
     setCoords(nextCoords);
 
     send({
@@ -55,10 +53,10 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
         folder: dataset.folder,
         subfolder_template: dataset.subfolder_template,
         filename_template: dataset.filename_template,
-        position: nextCoords.position || "0",
-        time: nextCoords.time || "0",
-        channel: nextCoords.channel || "0",
-        z: nextCoords.z || "0",
+        position: nextCoords.position ?? 0,
+        time: nextCoords.time ?? 0,
+        channel: nextCoords.channel ?? 0,
+        z: nextCoords.z ?? 0,
       },
     });
   };
@@ -98,7 +96,7 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
         <ChevronRight />
       </Button>
       <span className="w-10 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-        {values[localIndex] !== undefined ? parseInt(values[localIndex], 10) : 0}
+        {localIndex}
       </span>
     </div>
   );

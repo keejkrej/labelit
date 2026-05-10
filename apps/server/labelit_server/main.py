@@ -76,8 +76,12 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
             filename_template=payload.get("filename_template", "")
         )
         
+        # Map axes to just their lengths to save payload size and hide string formats from the web client
+        mapped_result = dict(result)
+        mapped_result["axes"] = {k: len(v) for k, v in result["axes"].items()}
+
         # Use Pydantic to validate and sanitize the payload, dropping internal non-serializable fields like 'lookup'.
-        safe_payload = SeriesDatasetPayload(**result).model_dump()
+        safe_payload = SeriesDatasetPayload(**mapped_result).model_dump()
         await ws.send_json({"type": "fs:series_dataset_loaded", "payload": safe_payload})
         return
     # ----- images -----
@@ -93,12 +97,18 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
             subfolder_template=payload.get("subfolder_template", ""),
             filename_template=payload.get("filename_template", "")
         )
+        
+        def _get_axis_val(axis_name: str) -> str:
+            vals = dataset["axes"][axis_name]
+            idx = payload.get(axis_name, 0)
+            return vals[idx] if idx < len(vals) else ("0" if not vals else vals[0])
+
         idx = series.resolve_series_record_index(
             dataset,
-            position=payload["position"],
-            time=payload["time"],
-            channel=payload["channel"],
-            z=payload["z"]
+            position=_get_axis_val("position"),
+            time=_get_axis_val("time"),
+            channel=_get_axis_val("channel"),
+            z=_get_axis_val("z")
         )
         path = dataset["records"][idx]["path"]
         result = images.open_image(path)
