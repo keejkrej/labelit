@@ -3,10 +3,11 @@ Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer ,
 """
 from qtpy import QtGui, QtCore
 from qtpy.QtGui import QPixmap, QDoubleValidator
-from qtpy.QtWidgets import QWidget, QDialog, QGridLayout, QPushButton, QLabel, QLineEdit, QDialogButtonBox, QComboBox, QCheckBox, QVBoxLayout
+from qtpy.QtWidgets import QWidget, QDialog, QGridLayout, QPushButton, QLabel, QLineEdit, QDialogButtonBox, QComboBox, QCheckBox, QVBoxLayout, QFileDialog
 import pyqtgraph as pg
 import numpy as np
 import pathlib, os
+from . import io as gui_io
 
 
 def stylesheet():
@@ -419,6 +420,7 @@ class TrainWindow(QDialog):
 
     def __init__(self, parent, model_strings):
         super().__init__(parent)
+        self.main_window = parent
         self.setGeometry(100, 100, 900, 550)
         self.setWindowTitle("train settings")
         self.win = QWidget(self)
@@ -426,7 +428,7 @@ class TrainWindow(QDialog):
         self.win.setLayout(self.l0)
 
         yoff = 0
-        qlabel = QLabel("train model w/ images + _seg.npy in current folder >>")
+        qlabel = QLabel("train model w/ images + _seg.npy in selected folder >>")
         qlabel.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
 
         qlabel.setAlignment(QtCore.Qt.AlignVCenter)
@@ -462,6 +464,21 @@ class TrainWindow(QDialog):
         self.use_norm = QCheckBox(f"use restored/filtered image")
         self.use_norm.setChecked(True)
 
+        yoff += 1
+        qlabel = QLabel("train data folder")
+        qlabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.l0.addWidget(qlabel, yoff, 0, 1, 1)
+
+        self.train_folder = QLineEdit(
+            parent.training_params.get("train_data_folder", parent.training_params.get("model_save_folder", ""))
+        )
+        self.train_folder.setMinimumWidth(300)
+        self.train_folder.editingFinished.connect(self._refresh_train_folder_preview)
+        self.l0.addWidget(self.train_folder, yoff, 1, 1, 1)
+        browse_btn = QPushButton("Browse...")
+        browse_btn.clicked.connect(lambda: self.browse_train_folder())
+        self.l0.addWidget(browse_btn, yoff, 2, 1, 1)
+
         yoff += 2
         qlabel = QLabel(
             "(to remove files, click cancel then remove \nfrom folder and reopen train window)"
@@ -483,21 +500,7 @@ class TrainWindow(QDialog):
         qlabel = QLabel("# of masks")
         qlabel.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
         self.l0.addWidget(qlabel, 0, 5, 1, 1)
-
-        for i in range(10):
-            if i > len(parent.train_files) - 1:
-                break
-            elif i == 9 and len(parent.train_files) > 10:
-                label = "..."
-                nmasks = "..."
-            else:
-                label = os.path.split(parent.train_files[i])[-1]
-                nmasks = str(parent.train_labels[i].max())
-            qlabel = QLabel(label)
-            self.l0.addWidget(qlabel, i + 1, 4, 1, 1)
-            qlabel = QLabel(nmasks)
-            qlabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            self.l0.addWidget(qlabel, i + 1, 5, 1, 1)
+        self._refresh_train_folder_preview()
 
     def accept(self, parent):
         # set training params
@@ -507,9 +510,67 @@ class TrainWindow(QDialog):
             "weight_decay": float(self.edits[1].text()),
             "n_epochs": int(self.edits[2].text()),
             "model_name": self.edits[3].text(),
+            "train_data_folder": self.train_folder.text().strip(),
             #"use_norm": True if self.use_norm.isChecked() else False,
         }
         self.done(1)
+
+    def _refresh_train_folder_preview(self):
+        self._clear_train_preview_rows()
+        folder = self.train_folder.text().strip()
+        if not folder:
+            self._add_train_preview_row(1, "(no folder selected)", "")
+            return
+
+        try:
+            image_names = self.main_window.get_training_image_files(
+                folder, nested=True
+            )
+            _, train_labels, train_files, _, _ = gui_io._get_train_set(image_names)
+        except Exception as e:
+            self._add_train_preview_row(1, str(e), "")
+            return
+
+        if not train_files:
+            self._add_train_preview_row(1, "no _seg.npy files found", "")
+            return
+
+        for i in range(10):
+            if i > len(train_files) - 1:
+                break
+            elif i == 9 and len(train_files) > 10:
+                label = "..."
+                nmasks = "..."
+            else:
+                label = os.path.split(train_files[i])[-1]
+                nmasks = str(train_labels[i].max())
+            self._add_train_preview_row(i + 1, label, nmasks)
+
+    def _clear_train_preview_rows(self):
+        for row in range(1, 11):
+            for col in [4, 5]:
+                item = self.l0.itemAtPosition(row, col)
+                if item is not None:
+                    widget = item.widget()
+                    if widget is not None:
+                        self.l0.removeWidget(widget)
+                        widget.setParent(None)
+
+    def _add_train_preview_row(self, row, filename, nmasks):
+        filename_label = QLabel(filename)
+        self.l0.addWidget(filename_label, row, 4, 1, 1)
+        nmasks_label = QLabel(nmasks)
+        nmasks_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+        self.l0.addWidget(nmasks_label, row, 5, 1, 1)
+
+    def browse_train_folder(self):
+        folder = QFileDialog.getExistingDirectory(
+            self, "Train images folder", self.train_folder.text()
+        )
+        if folder:
+            self.train_folder.setText(folder)
+            self._refresh_train_folder_preview()
+
 
 
 class ExampleGUI(QDialog):

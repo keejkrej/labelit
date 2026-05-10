@@ -315,6 +315,8 @@ class MainW(QMainWindow):
             "weight_decay": 0.1,
             "n_epochs": 100,
             "model_name": "cpsam" + d.strftime("_%Y%m%d_%H%M%S"),
+            "train_data_folder": "",
+            "model_save_folder": os.fspath(models.MODEL_DIR.joinpath("custom")),
         }
 
         self.stitch_threshold = 0.
@@ -1979,7 +1981,15 @@ class MainW(QMainWindow):
         if custom:
             self.current_model = self.ModelChooseC.currentText()
             self.current_model_path = os.fspath(
-                models.MODEL_DIR.joinpath(self.current_model))
+                models.MODEL_DIR.joinpath("custom", self.current_model)
+            )
+            if not os.path.exists(self.current_model_path):
+                # Backward compatibility: accept older user-models stored directly in MODEL_DIR.
+                legacy_path = os.fspath(
+                    models.MODEL_DIR.joinpath(self.current_model)
+                )
+                if os.path.exists(legacy_path):
+                    self.current_model_path = legacy_path
         else:
             self.current_model = "cpsam"
             self.current_model_path = models.model_path(self.current_model)
@@ -2014,13 +2024,43 @@ class MainW(QMainWindow):
             print("ERROR: cannot train model on 3D data")
             return
 
+        current_train_data_folder = self.training_params.get("train_data_folder", "")
+        if not current_train_data_folder:
+            current_train_data_folder = os.path.dirname(self.filename) if self.filename else ""
+            self.training_params["train_data_folder"] = current_train_data_folder
+
+        self.train_data, self.train_labels, self.train_files, restore, normalize_params = ([], [], [], None, copy.deepcopy(normalize_default))
+        if current_train_data_folder:
+            try:
+                self.train_data, self.train_labels, self.train_files, restore, normalize_params = self._get_train_dataset(
+                    current_train_data_folder, nested=True)
+            except ValueError as e:
+                self.logger.info(str(e))
+                self.train_files = []
+        else:
+            restore = None
+
         # train model
-        image_names = self.get_files()[0]
-        self.train_data, self.train_labels, self.train_files, restore, normalize_params = io._get_train_set(
-            image_names)
         TW = guiparts.TrainWindow(self, models.MODEL_NAMES)
         train = TW.exec_()
         if train:
+            train_data_folder = self.training_params.get("train_data_folder", "")
+            if not train_data_folder:
+                QMessageBox.warning(self, "Train", "No training folder specified.")
+                return
+            try:
+                self.train_data, self.train_labels, self.train_files, restore, normalize_params = self._get_train_dataset(
+                    train_data_folder, nested=True)
+            except ValueError as e:
+                self.logger.info(str(e))
+                QMessageBox.warning(self, "Train", str(e))
+                return
+
+            if len(self.train_files) == 0:
+                QMessageBox.warning(
+                    self, "Train", "No valid training images with _seg.npy found in folder."
+                )
+                return
             self.logger.info(
                 f"training with {[os.path.split(f)[1] for f in self.train_files]}")
             self.train_model(restore=restore, normalize_params=normalize_params)
@@ -2037,7 +2077,8 @@ class MainW(QMainWindow):
         
         self.model = models.CellposeModel(gpu=self.useGPU.isChecked(),
                                           model_type=model_type)
-        save_path = os.path.dirname(self.filename)
+        save_path = os.fspath(models.MODEL_DIR.joinpath("custom"))
+        os.makedirs(save_path, exist_ok=True)
 
         print("GUI_INFO: name of new model: " + self.training_params["model_name"])
         self.new_model_path, train_losses = train.train_seg(
@@ -2064,6 +2105,17 @@ class MainW(QMainWindow):
         self.logger.info(
             f"!!! computed masks for {os.path.split(self.filename)[1]} from new model !!!"
         )
+
+    def get_training_image_files(self, folder, nested=True):
+        if not folder:
+            return []
+        return get_image_files(folder, "_masks", look_one_level_down=nested)
+
+    def _get_train_dataset(self, folder, nested=True):
+        image_names = self.get_training_image_files(
+            folder, nested=nested
+        )
+        return io._get_train_set(image_names)
 
 
     def compute_cprob(self):

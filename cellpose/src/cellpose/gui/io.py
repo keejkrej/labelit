@@ -5,8 +5,9 @@ import os, gc
 import numpy as np
 import cv2
 import fastremap
+import shutil
 
-from ..io import imread, imread_2D, imread_3D, imsave, outlines_to_text, add_model, remove_model, save_rois
+from ..io import imread, imread_2D, imread_3D, imsave, outlines_to_text, save_rois
 from ..models import normalize_default, MODEL_DIR, MODEL_LIST_PATH, get_user_models
 from ..utils import masks_to_outlines, outlines_list
 
@@ -42,18 +43,37 @@ def _init_model_list(parent):
     parent.model_strings = get_user_models()
 
 
+def _get_custom_model_dir():
+    custom_dir = MODEL_DIR.joinpath("custom")
+    custom_dir.mkdir(parents=True, exist_ok=True)
+    return custom_dir
+
+
+def _write_model_list(model_strings):
+    with open(MODEL_LIST_PATH, "w") as textfile:
+        for model_string in model_strings:
+            textfile.write(model_string + "\n")
+
+
 def _add_model(parent, filename=None, load_model=True):
     if filename is None:
         name = QFileDialog.getOpenFileName(parent, "Add model to GUI")
         filename = name[0]
-    add_model(filename)
+    if filename == "":
+        return
     fname = os.path.split(filename)[-1]
-    parent.ModelChooseC.addItems([fname])
+    target = _get_custom_model_dir().joinpath(fname)
+    try:
+        shutil.copyfile(filename, os.fspath(target))
+    except shutil.SameFileError:
+        pass
     parent.model_strings.append(fname)
+    parent.ModelChooseC.addItems([fname])
 
     for ind, model_string in enumerate(parent.model_strings[:-1]):
         if model_string == fname:
             _remove_model(parent, ind=ind + 1, verbose=False)
+    _write_model_list(parent.model_strings)
 
     parent.ModelChooseC.setCurrentIndex(len(parent.model_strings))
     if load_model:
@@ -65,11 +85,15 @@ def _remove_model(parent, ind=None, verbose=True):
         ind = parent.ModelChooseC.currentIndex()
     if ind > 0:
         ind -= 1
+        modelstr = parent.model_strings[ind]
         parent.ModelChooseC.removeItem(ind + 1)
         del parent.model_strings[ind]
-        # remove model from txt path
-        modelstr = parent.ModelChooseC.currentText()
-        remove_model(modelstr)
+        _write_model_list(parent.model_strings)
+        model_path = _get_custom_model_dir().joinpath(modelstr)
+        if not model_path.exists():
+            model_path = MODEL_DIR.joinpath(modelstr)
+        if model_path.exists():
+            os.remove(os.fspath(model_path))
         if len(parent.model_strings) > 0:
             parent.ModelChooseC.setCurrentIndex(len(parent.model_strings))
         else:
