@@ -47,7 +47,7 @@ fs.mkdirSync(BUNDLE, { recursive: true });
 
 // ── 1. Build web ───────────────────────────────────────────────────────────
 console.log("⚡ Building web app...");
-run("pnpm --filter @labelit/web build --force");
+run("npx turbo run build --filter=@labelit/web --force");
 
 const webDist = path.join(WEB_SRC, "dist");
 if (!fs.existsSync(webDist)) {
