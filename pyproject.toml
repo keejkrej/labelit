@@ -1,2 +1,2 @@
 [tool.uv.workspace]
-members = ["cellacdc", "cellpose", "apps/server"]
+members = ["cellacdc", "cellpose", "apps/server", "python/contracts"]

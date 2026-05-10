@@ -20,6 +20,7 @@ resolution-markers = [
 members = [
     "cellacdc",
     "cellpose",
+    "labelit-contracts",
     "labelit-server",
 ]
 
@@ -1173,6 +1174,17 @@ wheels = [
 ]
 
 [[package]]
+name = "labelit-contracts"
+version = "0.1.0"
+source = { editable = "python/contracts" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.11" }]
+
+[[package]]
 name = "labelit-server"
 version = "0.2.0"
 source = { editable = "apps/server" }
@@ -1180,6 +1192,7 @@ dependencies = [
     { name = "cellpose" },
     { name = "fastapi" },
     { name = "imageio" },
+    { name = "labelit-contracts" },
     { name = "numpy" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -1193,6 +1206,7 @@ requires-dist = [
     { name = "cellpose", editable = "cellpose" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "imageio", specifier = ">=2.34" },
+    { name = "labelit-contracts", editable = "python/contracts" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pillow", specifier = ">=10" },
     { name = "pydantic", specifier = ">=2.11" },

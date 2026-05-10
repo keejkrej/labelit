@@ -14,20 +14,12 @@ import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from labelit_contracts import SeriesDatasetPayload
 
 from . import fs, images, masks, models
 from cellpose.gui import series
 
 app = FastAPI(title="Labelit Server", version="0.3.0")
-
-
-class SeriesDatasetPayload(BaseModel):
-    folder: str
-    template: str
-    subfolder_template: str
-    filename_template: str
-    placeholders: list[str]
-    axes: dict[str, list[str]]
 
 app.add_middleware(
     CORSMiddleware,
