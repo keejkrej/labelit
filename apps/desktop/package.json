@@ -1,0 +1,51 @@
+{
+  "name": "@labelit/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Labelit desktop shell — Electron wrapper for web + server",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "electron .",
+    "prebuild": "node scripts/prepare-bundle.js",
+    "build": "electron-builder --dir",
+    "predist": "node scripts/prepare-bundle.js",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@labelit/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "electron": "^36",
+    "electron-builder": "^26"
+  },
+  "build": {
+    "appId": "com.labelit.desktop",
+    "productName": "Labelit",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bundle/server",
+        "to": "server"
+      },
+      {
+        "from": "bundle/web",
+        "to": "web"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
+  }
+}

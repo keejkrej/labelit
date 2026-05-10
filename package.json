@@ -1,0 +1,16 @@
+{
+  "name": "labelit",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "fmt": "turbo run fmt"
+  },
+  "devDependencies": {
+    "turbo": "^2",
+    "typescript": "^5.8"
+  },
+  "packageManager": "pnpm@10.33.2"
+}

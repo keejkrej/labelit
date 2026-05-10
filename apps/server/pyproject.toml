@@ -1,0 +1,24 @@
+[project]
+name = "labelit-server"
+version = "0.1.0"
+description = "Labelit WebSocket server"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "websockets>=15",
+    "pydantic>=2.11",
+]
+
+[project.scripts]
+labelit-server = "labelit_server.main:run"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"

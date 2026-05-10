@@ -1,3 +1,4 @@
+# Python
 *.py[cod]
 *~
 __pycache__/
@@ -35,3 +36,19 @@ Thumbs.db
 *.egg-info/
 venv/
 venv*/
+
+# Node / JS
+node_modules/
+.turbo/
+*.tsbuildinfo
+
+# Electron
+apps/desktop/dist/
+apps/desktop/bundle/
+
+# Vite build output
+apps/web/dist/
+
+# OS
+.DS_Store
+Thumbs.db
