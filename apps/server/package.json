@@ -1,0 +1,9 @@
+{
+  "name": "@labelit/server",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "uv run labelit-server",
+    "start": "uv run labelit-server"
+  }
+}
