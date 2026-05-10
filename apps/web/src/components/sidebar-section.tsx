@@ -13,8 +13,8 @@ export function SidebarSection({
   return (
     <section
       className={cn(
-        "rounded-lg border bg-card not-dark:bg-clip-padding px-3 py-2.5",
-        "shadow-xs/5",
+        "rounded-lg border border-border/50 bg-card/60 backdrop-blur-sm not-dark:bg-clip-padding px-3 py-2.5",
+        "shadow-xs transition-colors duration-300",
         className,
       )}
     >

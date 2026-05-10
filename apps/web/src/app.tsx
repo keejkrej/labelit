@@ -57,8 +57,8 @@ function AppShell() {
   const mask = useSessionStore((s) => s.mask);
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      <header className="flex items-center justify-between border-border border-b bg-card/60 px-3 py-1.5">
+    <div className="flex h-screen flex-col bg-background text-foreground bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/5 via-background to-background">
+      <header className="relative z-10 flex items-center justify-between border-border/50 border-b bg-background/60 backdrop-blur-md px-3 py-1.5 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -90,13 +90,13 @@ function AppShell() {
 
       <Toolbar />
 
-      <main className="flex flex-1 overflow-hidden">
+      <main className="relative flex flex-1 overflow-hidden">
         <LeftSidebar />
         <CanvasArea />
         <RightSidebar />
       </main>
 
-      <footer className="flex items-center justify-between border-border border-t bg-card/60 px-3 py-1 text-muted-foreground text-xs">
+      <footer className="relative z-10 flex items-center justify-between border-border/50 border-t bg-background/60 backdrop-blur-md px-3 py-1 text-muted-foreground text-xs shadow-sm">
         <span>cellpose v4.1 · server-driven IO · GPU optional</span>
         <span>
           {mask ? `${mask.nRois} ROIs` : "0 ROIs"} ·{" "}
@@ -131,7 +131,7 @@ function Toolbar() {
   );
 
   return (
-    <div className="flex items-center gap-1 border-border border-b bg-background px-3 py-1.5">
+    <div className="relative z-10 flex items-center gap-1 border-border/50 border-b bg-background/60 backdrop-blur-md px-3 py-1.5 shadow-sm">
       <Button onClick={() => openBrowser("image")} size="xs" variant="ghost">
         <FolderOpen />
         open image

@@ -14,6 +14,7 @@ import { useWebSocket } from "@/hooks/use-websocket";
 import { useFsStore } from "@/stores/fs-store";
 import { useSessionStore } from "@/stores/session-store";
 import { useToolStore } from "@/stores/tool-store";
+import { SaveMenuItems } from "./save-menu";
 
 export function HeaderMenus() {
   const { send } = useWebSocket();
@@ -57,36 +58,7 @@ export function HeaderMenus() {
               Load processed (_seg.npy) <MenuShortcut>Ctrl+P</MenuShortcut>
             </MenuItem>
             <MenuSeparator />
-            <MenuItem
-              disabled={!hasMasks}
-              onClick={() => send({ type: "image:save_seg", payload: {} })}
-            >
-              Save _seg.npy <MenuShortcut>Ctrl+S</MenuShortcut>
-            </MenuItem>
-            <MenuItem
-              disabled={!hasMasks}
-              onClick={() => send({ type: "image:save_masks", payload: {} })}
-            >
-              Save masks PNG/tif <MenuShortcut>Ctrl+N</MenuShortcut>
-            </MenuItem>
-            <MenuItem
-              disabled={!hasMasks}
-              onClick={() => send({ type: "image:save_outlines", payload: {} })}
-            >
-              Save outlines text <MenuShortcut>Ctrl+O</MenuShortcut>
-            </MenuItem>
-            <MenuItem
-              disabled={!hasMasks}
-              onClick={() => send({ type: "image:save_rois", payload: {} })}
-            >
-              Save ROIs zip (ImageJ) <MenuShortcut>Ctrl+R</MenuShortcut>
-            </MenuItem>
-            <MenuItem
-              disabled={!hasMasks}
-              onClick={() => send({ type: "image:save_flows", payload: {} })}
-            >
-              Save flows tif <MenuShortcut>Ctrl+F</MenuShortcut>
-            </MenuItem>
+            <SaveMenuItems />
           </MenuPopup>
         </Menu>
 

@@ -94,7 +94,7 @@ export function RightSidebar() {
   const customs = models.filter((m) => m.source === "custom");
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-border border-l bg-background/50 p-3">
+    <aside className="relative z-10 flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-border/50 border-l bg-background/40 backdrop-blur-xl p-3 shadow-sm transition-all duration-300">
       <SidebarSection title="Segmentation">
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           <Checkbox

@@ -92,7 +92,7 @@ function ColorChannelSlider({
 
 export function LeftSidebar() {
   return (
-    <aside className="flex w-72 shrink-0 flex-col gap-3 overflow-y-auto border-border border-r bg-background/50 p-3">
+    <aside className="relative z-10 flex w-72 shrink-0 flex-col gap-3 overflow-y-auto border-border/50 border-r bg-background/40 backdrop-blur-xl p-3 shadow-sm transition-all duration-300">
       <SidebarSection title="Navigation">
         {AXES.map((axis) => (
           <AxisControl
