@@ -7,7 +7,7 @@ import sys, os, pathlib, warnings, datetime, time, copy
 from qtpy import QtGui, QtCore
 from superqt import QRangeSlider, QCollapsible
 from qtpy.QtWidgets import QMainWindow, QApplication, QWidget, \
-    QComboBox, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QSlider, \
+    QComboBox, QHBoxLayout, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QSlider, \
         QLineEdit, QMessageBox, QGroupBox, QMenu, QAction
 import pyqtgraph as pg
 
@@ -240,10 +240,9 @@ class MainW(QMainWindow):
 
         # ---- MAIN WIDGET LAYOUT ---- #
         self.cwidget = QWidget(self)
-        self.lmain = QGridLayout()
+        self.lmain = QHBoxLayout()
         self.cwidget.setLayout(self.lmain)
         self.setCentralWidget(self.cwidget)
-        self.lmain.setVerticalSpacing(0)
         self.lmain.setContentsMargins(0, 0, 0, 10)
 
         self.imask = 0
@@ -254,18 +253,16 @@ class MainW(QMainWindow):
         self.right_sidebar_widget = QWidget(self)
         self.right_sidebar_widget.setLayout(self.right_sidebar)
         b = self.make_buttons()
-        self.lmain.addWidget(self.left_sidebar_widget, 0, 0, 39, 9)
-        self.lmain.addWidget(self.right_sidebar_widget, 0, 39, 39, 9)
 
         # ---- drawing area ---- #
         self.win = pg.GraphicsLayoutWidget()
-
-        self.lmain.addWidget(self.win, 0, 9, 40, 30)
+        self.lmain.addWidget(self.left_sidebar_widget, 1)
+        self.lmain.addWidget(self.win, 2)
+        self.lmain.addWidget(self.right_sidebar_widget, 1)
 
         self.win.scene().sigMouseClicked.connect(self.plot_clicked)
         self.win.scene().sigMouseMoved.connect(self.mouse_moved)
         self.make_viewbox()
-        self.lmain.setColumnStretch(10, 1)
         bwrmap = make_bwr()
         self.bwr = bwrmap.getLookupTable(start=0.0, stop=255.0, alpha=False)
         self.cmap = []

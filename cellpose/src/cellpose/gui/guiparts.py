@@ -3,7 +3,7 @@ Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer ,
 """
 from qtpy import QtGui, QtCore
 from qtpy.QtGui import QPixmap, QDoubleValidator
-from qtpy.QtWidgets import QWidget, QDialog, QGridLayout, QPushButton, QLabel, QLineEdit, QDialogButtonBox, QComboBox, QCheckBox, QVBoxLayout, QFileDialog
+from qtpy.QtWidgets import QWidget, QDialog, QGridLayout, QPushButton, QLabel, QLineEdit, QDialogButtonBox, QComboBox, QCheckBox, QVBoxLayout, QHBoxLayout, QFileDialog, QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView, QSizePolicy
 import pyqtgraph as pg
 import numpy as np
 import pathlib, os
@@ -259,7 +259,6 @@ class SegmentationSettings(QWidget):
         self.diameter_box = QLineEdit()
         self.diameter_box.setToolTip("diameter of cells in pixels. If not blank, image will be resized relative to 30 pixel cell diameters")
         self.diameter_box.setFont(font)
-        self.diameter_box.setFixedWidth(40)
         self.diameter_box.setText(' ')
         grid_layout.addWidget(self.diameter_box, row, 2, 1, 2)
 
@@ -273,7 +272,6 @@ class SegmentationSettings(QWidget):
         grid_layout.addWidget(flow_threshold_qlabel, row, 0, 1, 2)
         self.flow_threshold_box = QLineEdit()
         self.flow_threshold_box.setText("0.4")
-        self.flow_threshold_box.setFixedWidth(40)
         self.flow_threshold_box.setFont(font)
         grid_layout.addWidget(self.flow_threshold_box, row, 2, 1, 2)
         self.flow_threshold_box.setToolTip("threshold on flow error to accept a mask (set higher to get more cells, e.g. in range from (0.1, 3.0), OR set to 0.0 to turn off so no cells discarded);\n press enter to recompute if model already run")
@@ -286,7 +284,6 @@ class SegmentationSettings(QWidget):
         grid_layout.addWidget(cellprob_qlabel, row, 4, 1, 2)
         self.cellprob_threshold_box = QLineEdit()
         self.cellprob_threshold_box.setText("0.0")
-        self.cellprob_threshold_box.setFixedWidth(40)
         self.cellprob_threshold_box.setFont(font)
         self.cellprob_threshold_box.setToolTip("threshold on cellprob output to seed cell masks (set lower to include more pixels or higher to include fewer, e.g. in range from (-6, 6)); \n press enter to recompute if model already run")
         grid_layout.addWidget(self.cellprob_threshold_box, row, 6, 1, 2)
@@ -310,7 +307,6 @@ class SegmentationSettings(QWidget):
         self.norm_percentile_low_box = QLineEdit()
         self.norm_percentile_low_box.setText("1.0")
         self.norm_percentile_low_box.setFont(font)
-        self.norm_percentile_low_box.setFixedWidth(40)
         self.norm_percentile_low_box.setToolTip("pixels at this percentile set to 0 (default 1.0)")
         self.norm_percentile_low_box.setValidator(validator)
         self.norm_percentile_low_box.editingFinished.connect(self.validate_normalization_range)
@@ -323,7 +319,6 @@ class SegmentationSettings(QWidget):
         self.norm_percentile_high_box = QLineEdit()
         self.norm_percentile_high_box.setText("99.0")
         self.norm_percentile_high_box.setFont(font)
-        self.norm_percentile_high_box.setFixedWidth(40)
         self.norm_percentile_high_box.setToolTip("pixels at this percentile set to 1 (default 99.0)")
         self.norm_percentile_high_box.setValidator(validator)
         self.norm_percentile_high_box.editingFinished.connect(self.validate_normalization_range)
@@ -340,7 +335,6 @@ class SegmentationSettings(QWidget):
         grid_layout.addWidget(niter_qlabel, row, 0, 1, 4)
         self.niter_box = QLineEdit()
         self.niter_box.setText("0")
-        self.niter_box.setFixedWidth(40)
         self.niter_box.setFont(font)
         self.niter_box.setToolTip("number of iterations for dynamics (0 uses default based on diameter); use 2000 for bacteria")
         grid_layout.addWidget(self.niter_box, row, 4, 1, 2)
@@ -421,85 +415,86 @@ class TrainWindow(QDialog):
     def __init__(self, parent, model_strings):
         super().__init__(parent)
         self.main_window = parent
-        self.setGeometry(100, 100, 900, 550)
+        self.setGeometry(100, 100, 800, 480)
         self.setWindowTitle("train settings")
-        self.win = QWidget(self)
-        self.l0 = QGridLayout()
-        self.win.setLayout(self.l0)
+        self.l0 = QHBoxLayout()
+        self.setLayout(self.l0)
+        self.l0.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
 
-        yoff = 0
-        qlabel = QLabel("train model w/ images + _seg.npy in selected folder >>")
-        qlabel.setFont(QtGui.QFont("Arial", 10, QtGui.QFont.Bold))
+        left_column = QVBoxLayout()
+        left_column.setAlignment(QtCore.Qt.AlignTop | QtCore.Qt.AlignLeft)
 
-        qlabel.setAlignment(QtCore.Qt.AlignVCenter)
-        self.l0.addWidget(qlabel, yoff, 0, 1, 2)
+        # train data folder (moved to top)
+        qlabel = QLabel("train data folder")
+        qlabel.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        train_data_layout = QHBoxLayout()
+        train_data_layout.addWidget(qlabel)
+        self.train_folder = QLineEdit(
+            parent.training_params.get("train_data_folder", parent.training_params.get("model_save_folder", ""))
+        )
+        self.train_folder.editingFinished.connect(self._refresh_train_folder_preview)
+        browse_btn = QPushButton("Browse...")
+        browse_btn.clicked.connect(lambda: self.browse_train_folder())
+        train_data_layout.addWidget(self.train_folder)
+        train_data_layout.addWidget(browse_btn)
+        left_column.addLayout(train_data_layout)
 
         # choose initial model
-        yoff += 1
         self.ModelChoose = QComboBox()
         self.ModelChoose.addItems(model_strings)
-        self.ModelChoose.setFixedWidth(150)
         self.ModelChoose.setCurrentIndex(parent.training_params["model_index"])
-        self.l0.addWidget(self.ModelChoose, yoff, 1, 1, 1)
         qlabel = QLabel("initial model: ")
-        qlabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.l0.addWidget(qlabel, yoff, 0, 1, 1)
+        qlabel.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+        model_layout = QHBoxLayout()
+        model_layout.addWidget(qlabel)
+        model_layout.addWidget(self.ModelChoose)
+        left_column.addLayout(model_layout)
 
         # choose parameters
         labels = ["learning_rate", "weight_decay", "n_epochs", "model_name"]
         self.edits = []
-        yoff += 1
         for i, label in enumerate(labels):
+            param_layout = QHBoxLayout()
             qlabel = QLabel(label)
-            qlabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-            self.l0.addWidget(qlabel, i + yoff, 0, 1, 1)
+            qlabel.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
+            param_layout.addWidget(qlabel)
             self.edits.append(QLineEdit())
             self.edits[-1].setText(str(parent.training_params[label]))
-            self.edits[-1].setFixedWidth(200)
-            self.l0.addWidget(self.edits[-1], i + yoff, 1, 1, 1)
+            param_layout.addWidget(self.edits[-1])
+            left_column.addLayout(param_layout)
 
-        yoff += len(labels)
-
-        yoff += 1
         self.use_norm = QCheckBox(f"use restored/filtered image")
         self.use_norm.setChecked(True)
 
-        yoff += 1
-        qlabel = QLabel("train data folder")
-        qlabel.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.l0.addWidget(qlabel, yoff, 0, 1, 1)
-
-        self.train_folder = QLineEdit(
-            parent.training_params.get("train_data_folder", parent.training_params.get("model_save_folder", ""))
-        )
-        self.train_folder.setMinimumWidth(300)
-        self.train_folder.editingFinished.connect(self._refresh_train_folder_preview)
-        self.l0.addWidget(self.train_folder, yoff, 1, 1, 1)
-        browse_btn = QPushButton("Browse...")
-        browse_btn.clicked.connect(lambda: self.browse_train_folder())
-        self.l0.addWidget(browse_btn, yoff, 2, 1, 1)
-
-        yoff += 2
-        qlabel = QLabel(
-            "(to remove files, click cancel then remove \nfrom folder and reopen train window)"
-        )
-        self.l0.addWidget(qlabel, yoff, 0, 2, 4)
-
         # click button
-        yoff += 3
         QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(QBtn)
         self.buttonBox.accepted.connect(lambda: self.accept(parent))
         self.buttonBox.rejected.connect(self.reject)
-        self.l0.addWidget(self.buttonBox, yoff, 0, 1, 4)
+        left_column.addWidget(self.buttonBox)
+        left_column.addStretch(1)
 
         # list files in folder
-        qlabel = QLabel("filenames")
-        qlabel.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
-        self.l0.addWidget(qlabel, 0, 4, 1, 1)
-        qlabel = QLabel("# of masks")
-        qlabel.setFont(QtGui.QFont("Arial", 8, QtGui.QFont.Bold))
-        self.l0.addWidget(qlabel, 0, 5, 1, 1)
+        self.train_files_table = QTableWidget(0, 2, self)
+        self.train_files_table.setHorizontalHeaderLabels(["filenames", "# of masks"])
+        self.train_files_table.verticalHeader().setVisible(False)
+        self.train_files_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.train_files_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.train_files_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.train_files_table.horizontalHeader().setStretchLastSection(True)
+        self.train_files_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.train_files_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.train_files_table.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
+        self.train_files_table.setAlternatingRowColors(True)
+        self.train_files_table.setWordWrap(False)
+        right_column = QVBoxLayout()
+        right_column.addWidget(self.train_files_table)
+        right_column.setContentsMargins(0, 0, 0, 0)
+        self.train_files_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.l0.addLayout(left_column)
+        self.l0.addLayout(right_column)
+
         self._refresh_train_folder_preview()
 
     def accept(self, parent):
@@ -516,10 +511,10 @@ class TrainWindow(QDialog):
         self.done(1)
 
     def _refresh_train_folder_preview(self):
-        self._clear_train_preview_rows()
+        self.train_files_table.setRowCount(0)
         folder = self.train_folder.text().strip()
         if not folder:
-            self._add_train_preview_row(1, "(no folder selected)", "")
+            self._add_train_preview_message("(no folder selected)")
             return
 
         try:
@@ -528,40 +523,27 @@ class TrainWindow(QDialog):
             )
             _, train_labels, train_files, _, _ = gui_io._get_train_set(image_names)
         except Exception as e:
-            self._add_train_preview_row(1, str(e), "")
+            self._add_train_preview_message(str(e))
             return
 
         if not train_files:
-            self._add_train_preview_row(1, "no _seg.npy files found", "")
+            self._add_train_preview_message("no _seg.npy files found")
             return
 
-        for i in range(10):
-            if i > len(train_files) - 1:
-                break
-            elif i == 9 and len(train_files) > 10:
-                label = "..."
-                nmasks = "..."
-            else:
-                label = os.path.split(train_files[i])[-1]
-                nmasks = str(train_labels[i].max())
-            self._add_train_preview_row(i + 1, label, nmasks)
+        for i, train_file in enumerate(train_files):
+            label = os.path.split(train_file)[-1]
+            nmasks = str(train_labels[i].max())
+            self._add_train_preview_row(label, nmasks)
 
-    def _clear_train_preview_rows(self):
-        for row in range(1, 11):
-            for col in [4, 5]:
-                item = self.l0.itemAtPosition(row, col)
-                if item is not None:
-                    widget = item.widget()
-                    if widget is not None:
-                        self.l0.removeWidget(widget)
-                        widget.setParent(None)
+    def _add_train_preview_row(self, filename, nmasks):
+        row = self.train_files_table.rowCount()
+        self.train_files_table.insertRow(row)
+        self.train_files_table.setItem(row, 0, QTableWidgetItem(filename))
+        self.train_files_table.setItem(row, 1, QTableWidgetItem(str(nmasks)))
 
-    def _add_train_preview_row(self, row, filename, nmasks):
-        filename_label = QLabel(filename)
-        self.l0.addWidget(filename_label, row, 4, 1, 1)
-        nmasks_label = QLabel(nmasks)
-        nmasks_label.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
-        self.l0.addWidget(nmasks_label, row, 5, 1, 1)
+    def _add_train_preview_message(self, message):
+        self._add_train_preview_row(message, "")
+        self.train_files_table.item(0, 0).setTextAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
 
     def browse_train_folder(self):
         folder = QFileDialog.getExistingDirectory(
