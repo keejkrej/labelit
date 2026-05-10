@@ -5,17 +5,46 @@ import { z } from "zod";
 // ---------------------------------------------------------------------------
 
 export const MessageTypeSchema = z.enum([
-  // Client → Server
-  "label:create",
-  "label:update",
-  "label:delete",
-  "label:list",
+  // Filesystem (client → server)
+  "fs:list_roots",
+  "fs:list_dir",
+  "fs:home",
+  // Filesystem (server → client)
+  "fs:roots_listed",
+  "fs:dir_listed",
+  "fs:home_resolved",
 
-  // Server → Client
-  "label:created",
-  "label:updated",
-  "label:deleted",
-  "label:listed",
+  // Image IO (client → server)
+  "image:open",
+  "image:open_masks",
+  "image:save_masks",
+  "image:save_outlines",
+  "image:save_rois",
+  "image:save_flows",
+  "image:save_seg",
+  // Image IO (server → client)
+  "image:opened",
+  "image:saved",
+
+  // Mask editing (client → server)
+  "mask:stroke",
+  "mask:remove_at",
+  "mask:clear",
+  "mask:undo",
+  "mask:redo",
+  "mask:request",
+  // Mask editing (server → client)
+  "mask:updated",
+
+  // Models (client → server)
+  "model:list",
+  "model:run",
+  "model:train",
+  // Models (server → client)
+  "model:listed",
+  "model:progress",
+  "model:run_done",
+  "model:train_done",
 
   // Bidirectional
   "ping",
@@ -26,63 +55,224 @@ export const MessageTypeSchema = z.enum([
 export type MessageType = z.infer<typeof MessageTypeSchema>;
 
 // ---------------------------------------------------------------------------
-// Domain payloads
+// Filesystem
 // ---------------------------------------------------------------------------
 
-export const LabelSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
+export const FsEntryKindSchema = z.enum(["dir", "file", "drive"]);
+export type FsEntryKind = z.infer<typeof FsEntryKindSchema>;
 
-export type Label = z.infer<typeof LabelSchema>;
+export const FsEntrySchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  kind: FsEntryKindSchema,
+  size: z.number().int().nonnegative().nullable().optional(),
+  modifiedAt: z.string().nullable().optional(),
+});
+export type FsEntry = z.infer<typeof FsEntrySchema>;
+
+export const ListDirPayload = z.object({
+  path: z.string(),
+  // glob filter applied to file names (case-insensitive). Directories always pass.
+  patterns: z.array(z.string()).optional(),
+});
+export type ListDirPayload = z.infer<typeof ListDirPayload>;
+
+export const DirListedPayload = z.object({
+  path: z.string(),
+  parent: z.string().nullable(),
+  entries: z.array(FsEntrySchema),
+});
+export type DirListedPayload = z.infer<typeof DirListedPayload>;
+
+export const RootsListedPayload = z.object({
+  platform: z.enum(["windows", "darwin", "linux"]),
+  roots: z.array(FsEntrySchema),
+});
+export type RootsListedPayload = z.infer<typeof RootsListedPayload>;
+
+export const HomeResolvedPayload = z.object({
+  path: z.string(),
+});
+export type HomeResolvedPayload = z.infer<typeof HomeResolvedPayload>;
 
 // ---------------------------------------------------------------------------
-// Client → Server messages
+// Images
 // ---------------------------------------------------------------------------
 
-export const CreateLabelPayload = z.object({
-  name: z.string().min(1),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+export const OpenImagePayload = z.object({
+  path: z.string(),
 });
-export type CreateLabelPayload = z.infer<typeof CreateLabelPayload>;
+export type OpenImagePayload = z.infer<typeof OpenImagePayload>;
 
-export const UpdateLabelPayload = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(1).optional(),
-  color: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
+export const OpenMasksPayload = z.object({
+  path: z.string(),
+  imagePath: z.string(),
 });
-export type UpdateLabelPayload = z.infer<typeof UpdateLabelPayload>;
+export type OpenMasksPayload = z.infer<typeof OpenMasksPayload>;
 
-export const DeleteLabelPayload = z.object({
-  id: z.string().uuid(),
+export const ImageMetaSchema = z.object({
+  path: z.string(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  channels: z.number().int().positive(),
+  depth: z.number().int().positive(),
+  dtype: z.string(),
+  // base64-encoded preview (PNG) for fast display; raw pixels are kept server-side
+  previewPng: z.string().optional(),
 });
-export type DeleteLabelPayload = z.infer<typeof DeleteLabelPayload>;
+export type ImageMeta = z.infer<typeof ImageMetaSchema>;
+
+export const SavePathPayload = z.object({
+  path: z.string().optional(),
+});
+export type SavePathPayload = z.infer<typeof SavePathPayload>;
+
+export const SavedPayload = z.object({
+  path: z.string(),
+});
+export type SavedPayload = z.infer<typeof SavedPayload>;
+
+// ---------------------------------------------------------------------------
+// Mask editing — original-image-pixel coordinates throughout.
+// ---------------------------------------------------------------------------
+
+export const PointSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+export type Point = z.infer<typeof PointSchema>;
+
+export const StrokePayload = z.object({
+  points: z.array(PointSchema).min(1),
+  radius: z.number().int().positive(),
+  /** When true, paints background (0) — i.e. eraser. */
+  erase: z.boolean().optional(),
+});
+export type StrokePayload = z.infer<typeof StrokePayload>;
+
+export const RemoveAtPayload = z.object({
+  x: z.number(),
+  y: z.number(),
+});
+export type RemoveAtPayload = z.infer<typeof RemoveAtPayload>;
+
+export const MaskStateSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  nRois: z.number().int().nonnegative(),
+  previewPng: z.string().nullable().optional(),
+  canUndo: z.boolean(),
+  canRedo: z.boolean(),
+});
+export type MaskState = z.infer<typeof MaskStateSchema>;
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+export const ModelInfoSchema = z.object({
+  name: z.string(),
+  // "builtin" → shipped with cellpose; "custom" → user-trained
+  source: z.enum(["builtin", "custom"]),
+});
+export type ModelInfo = z.infer<typeof ModelInfoSchema>;
+
+export const RunModelPayload = z.object({
+  model: z.string(),
+  imagePath: z.string(),
+  diameter: z.number().nullable().optional(),
+  flowThreshold: z.number().optional(),
+  cellprobThreshold: z.number().optional(),
+  niter: z.number().int().nonnegative().optional(),
+  minSize: z.number().int().nonnegative().optional(),
+  anisotropy: z.number().optional(),
+  useGpu: z.boolean().optional(),
+});
+export type RunModelPayload = z.infer<typeof RunModelPayload>;
+
+export const TrainModelPayload = z.object({
+  baseModel: z.string(),
+  trainDir: z.string(),
+  modelName: z.string(),
+  nEpochs: z.number().int().positive().optional(),
+  learningRate: z.number().positive().optional(),
+  weightDecay: z.number().nonnegative().optional(),
+  batchSize: z.number().int().positive().optional(),
+  useGpu: z.boolean().optional(),
+});
+export type TrainModelPayload = z.infer<typeof TrainModelPayload>;
+
+export const ProgressPayload = z.object({
+  job: z.enum(["run", "train"]),
+  progress: z.number().min(0).max(1),
+  message: z.string().optional(),
+});
+export type ProgressPayload = z.infer<typeof ProgressPayload>;
+
+export const RunDonePayload = z.object({
+  imagePath: z.string(),
+  nRois: z.number().int().nonnegative(),
+  // server-side path to autosaved _seg.npy (cellpose convention)
+  segPath: z.string().nullable(),
+});
+export type RunDonePayload = z.infer<typeof RunDonePayload>;
+
+export const TrainDonePayload = z.object({
+  modelName: z.string(),
+  modelPath: z.string(),
+});
+export type TrainDonePayload = z.infer<typeof TrainDonePayload>;
 
 // ---------------------------------------------------------------------------
 // Generic message envelope
 // ---------------------------------------------------------------------------
 
 export const ClientMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("label:create"), payload: CreateLabelPayload }),
-  z.object({ type: z.literal("label:update"), payload: UpdateLabelPayload }),
-  z.object({ type: z.literal("label:delete"), payload: DeleteLabelPayload }),
-  z.object({ type: z.literal("label:list") }),
+  // fs
+  z.object({ type: z.literal("fs:list_roots") }),
+  z.object({ type: z.literal("fs:list_dir"), payload: ListDirPayload }),
+  z.object({ type: z.literal("fs:home") }),
+  // image
+  z.object({ type: z.literal("image:open"), payload: OpenImagePayload }),
+  z.object({ type: z.literal("image:open_masks"), payload: OpenMasksPayload }),
+  z.object({ type: z.literal("image:save_masks"), payload: SavePathPayload }),
+  z.object({ type: z.literal("image:save_outlines"), payload: SavePathPayload }),
+  z.object({ type: z.literal("image:save_rois"), payload: SavePathPayload }),
+  z.object({ type: z.literal("image:save_flows"), payload: SavePathPayload }),
+  z.object({ type: z.literal("image:save_seg"), payload: SavePathPayload }),
+  // mask edits
+  z.object({ type: z.literal("mask:stroke"), payload: StrokePayload }),
+  z.object({ type: z.literal("mask:remove_at"), payload: RemoveAtPayload }),
+  z.object({ type: z.literal("mask:clear") }),
+  z.object({ type: z.literal("mask:undo") }),
+  z.object({ type: z.literal("mask:redo") }),
+  z.object({ type: z.literal("mask:request") }),
+  // model
+  z.object({ type: z.literal("model:list") }),
+  z.object({ type: z.literal("model:run"), payload: RunModelPayload }),
+  z.object({ type: z.literal("model:train"), payload: TrainModelPayload }),
+  // misc
   z.object({ type: z.literal("ping") }),
 ]);
 
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
 export const ServerMessageSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("label:created"), payload: LabelSchema }),
-  z.object({ type: z.literal("label:updated"), payload: LabelSchema }),
-  z.object({ type: z.literal("label:deleted"), payload: z.object({ id: z.string().uuid() }) }),
-  z.object({ type: z.literal("label:listed"), payload: z.array(LabelSchema) }),
+  // fs
+  z.object({ type: z.literal("fs:roots_listed"), payload: RootsListedPayload }),
+  z.object({ type: z.literal("fs:dir_listed"), payload: DirListedPayload }),
+  z.object({ type: z.literal("fs:home_resolved"), payload: HomeResolvedPayload }),
+  // image
+  z.object({ type: z.literal("image:opened"), payload: ImageMetaSchema }),
+  z.object({ type: z.literal("image:saved"), payload: SavedPayload }),
+  // mask state
+  z.object({ type: z.literal("mask:updated"), payload: MaskStateSchema }),
+  // model
+  z.object({ type: z.literal("model:listed"), payload: z.array(ModelInfoSchema) }),
+  z.object({ type: z.literal("model:progress"), payload: ProgressPayload }),
+  z.object({ type: z.literal("model:run_done"), payload: RunDonePayload }),
+  z.object({ type: z.literal("model:train_done"), payload: TrainDonePayload }),
+  // misc
   z.object({ type: z.literal("pong") }),
   z.object({ type: z.literal("error"), payload: z.object({ message: z.string() }) }),
 ]);

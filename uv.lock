@@ -1174,19 +1174,29 @@ wheels = [
 
 [[package]]
 name = "labelit-server"
-version = "0.1.0"
-source = { virtual = "apps/server" }
+version = "0.2.0"
+source = { editable = "apps/server" }
 dependencies = [
+    { name = "cellpose" },
     { name = "fastapi" },
+    { name = "imageio" },
+    { name = "numpy" },
+    { name = "pillow" },
     { name = "pydantic" },
+    { name = "tifffile" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "websockets" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "cellpose", editable = "cellpose" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "imageio", specifier = ">=2.34" },
+    { name = "numpy", specifier = ">=1.26" },
+    { name = "pillow", specifier = ">=10" },
     { name = "pydantic", specifier = ">=2.11" },
+    { name = "tifffile", specifier = ">=2024.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.34" },
     { name = "websockets", specifier = ">=15" },
 ]

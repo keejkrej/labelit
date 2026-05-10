@@ -1,17 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "labelit-server"
-version = "0.1.0"
-description = "Labelit WebSocket server"
+version = "0.2.0"
+description = "Labelit WebSocket server — server-driven file IO and cellpose inference/training"
 requires-python = ">=3.12"
 dependencies = [
+    # web stack
     "fastapi>=0.115",
     "uvicorn[standard]>=0.34",
     "websockets>=15",
     "pydantic>=2.11",
+    # imaging
+    "numpy>=1.26",
+    "pillow>=10",
+    "imageio>=2.34",
+    "tifffile>=2024.1",
+    # cellpose (editable workspace member; see uv workspace config in repo root)
+    "cellpose>=4.1",
 ]
 
 [project.scripts]
 labelit-server = "labelit_server.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["labelit_server"]
 
 [tool.ruff]
 line-length = 100
@@ -22,3 +37,13 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+cellpose = { workspace = true }
+torch = [{ index = "pytorch", marker = "sys_platform != 'darwin'" }]
+torchvision = [{ index = "pytorch", marker = "sys_platform != 'darwin'" }]

@@ -65,11 +65,46 @@ fs.mkdirSync(serverBundle, { recursive: true });
 // Copy server Python source
 copyDirSync(path.join(SERVER_SRC, "labelit_server"), path.join(serverBundle, "labelit_server"));
 
-// Copy pyproject.toml so uv sync can create the venv with deps
-fs.copyFileSync(
-  path.join(SERVER_SRC, "pyproject.toml"),
-  path.join(serverBundle, "pyproject.toml")
+// Copy cellpose package into the bundle
+console.log("  Copying cellpose workspace member...");
+const cellposeSrc = path.join(ROOT, "cellpose");
+const cellposeBundle = path.join(serverBundle, "cellpose");
+// Skip unnecessary folders
+copyDirSync(cellposeSrc, cellposeBundle, new Set(["__pycache__", ".ruff_cache", ".pytest_cache", ".git", "models", "docs", "tests", "dist"]));
+
+// Replace dependencies in bundled cellpose's pyproject.toml with core deps only
+const cellposeTomlPath = path.join(cellposeBundle, "pyproject.toml");
+if (fs.existsSync(cellposeTomlPath)) {
+  let cellposeToml = fs.readFileSync(cellposeTomlPath, "utf-8");
+  const coreDeps = `dependencies = [
+    "numpy",
+    "scipy",
+    "natsort",
+    "tifffile",
+    "tqdm",
+    "torch",
+    "torchvision",
+    "opencv-python-headless",
+    "fastremap",
+    "imagecodecs",
+    "roifile",
+    "fill-voids",
+    "segment_anything"
+]`;
+  // Match dependencies = [...] and replace it entirely
+  cellposeToml = cellposeToml.replace(/dependencies\s*=\s*\[[\s\S]*?\]/, coreDeps);
+  fs.writeFileSync(cellposeTomlPath, cellposeToml);
+}
+
+// Copy and rewrite pyproject.toml so uv sync can find the local cellpose
+console.log("  Rewriting pyproject.toml to use local cellpose...");
+const serverTomlPath = path.join(serverBundle, "pyproject.toml");
+let serverToml = fs.readFileSync(path.join(SERVER_SRC, "pyproject.toml"), "utf-8");
+serverToml = serverToml.replace(
+  'cellpose = { workspace = true }',
+  'cellpose = { path = "./cellpose" }'
 );
+fs.writeFileSync(serverTomlPath, serverToml);
 
 // Copy .python-version so uv uses the right interpreter
 const pyVersionFile = path.join(ROOT, ".python-version");

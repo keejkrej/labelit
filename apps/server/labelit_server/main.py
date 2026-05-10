@@ -1,16 +1,21 @@
-"""Labelit WebSocket server — FastAPI application."""
+"""Labelit WebSocket server — FastAPI application.
+
+All file IO and model train/inference for the webapp goes through this server.
+The webapp only renders state; pixel data and model weights never leave this
+process unless explicitly saved.
+"""
 
 from __future__ import annotations
 
-import uuid
-from datetime import UTC, datetime
+import traceback
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
-app = FastAPI(title="Labelit Server", version="0.1.0")
+from . import fs, images, masks, models
+
+app = FastAPI(title="Labelit Server", version="0.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,142 +25,133 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# In-memory label store (swap for DB later)
-# ---------------------------------------------------------------------------
-
-
-class Label(BaseModel):
-    id: str
-    name: str
-    color: str
-    createdAt: str
-    updatedAt: str
-
-
-_labels: dict[str, Label] = {}
-
-
-# ---------------------------------------------------------------------------
-# HTTP endpoints
-# ---------------------------------------------------------------------------
-
-
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# ---------------------------------------------------------------------------
-# WebSocket endpoint
-# ---------------------------------------------------------------------------
+async def _send_error(ws: WebSocket, message: str) -> None:
+    await ws.send_json({"type": "error", "payload": {"message": message}})
 
 
-class ConnectionManager:
-    def __init__(self) -> None:
-        self.active: list[WebSocket] = []
-
-    async def connect(self, ws: WebSocket) -> None:
-        await ws.accept()
-        self.active.append(ws)
-
-    def disconnect(self, ws: WebSocket) -> None:
-        self.active.remove(ws)
-
-    async def broadcast(self, message: dict) -> None:
-        for ws in self.active:
-            await ws.send_json(message)
+async def _send_mask_state(ws: WebSocket) -> None:
+    await ws.send_json({"type": "mask:updated", "payload": masks.current_state()})
 
 
-manager = ConnectionManager()
+async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
+    if msg_type == "ping":
+        await ws.send_json({"type": "pong"})
+        return
+
+    # ----- filesystem -----
+    if msg_type == "fs:list_roots":
+        await ws.send_json({"type": "fs:roots_listed", "payload": fs.list_roots()})
+        return
+    if msg_type == "fs:list_dir":
+        path = payload.get("path")
+        if not path:
+            raise ValueError("fs:list_dir requires payload.path")
+        result = fs.list_dir(path, patterns=payload.get("patterns"))
+        await ws.send_json({"type": "fs:dir_listed", "payload": result})
+        return
+    if msg_type == "fs:home":
+        await ws.send_json({"type": "fs:home_resolved", "payload": fs.resolve_home()})
+        return
+
+    # ----- images -----
+    if msg_type == "image:open":
+        result = images.open_image(payload["path"])
+        masks.reset_history(result["path"])
+        await ws.send_json({"type": "image:opened", "payload": result})
+        await _send_mask_state(ws)
+        return
+    if msg_type == "image:open_masks":
+        masks_path = payload["path"]
+        image_path = payload.get("imagePath", masks_path)
+        images.open_masks(image_path, masks_path)
+        masks.reset_history(image_path)
+        await _send_mask_state(ws)
+        return
+
+    # ----- saves -----
+    if msg_type == "image:save_seg":
+        await ws.send_json({"type": "image:saved", "payload": images.save_seg(payload.get("path"))})
+        return
+    if msg_type == "image:save_masks":
+        await ws.send_json({"type": "image:saved", "payload": images.save_masks_png(payload.get("path"))})
+        return
+    if msg_type == "image:save_outlines":
+        await ws.send_json({"type": "image:saved", "payload": images.save_outlines_text(payload.get("path"))})
+        return
+    if msg_type == "image:save_rois":
+        await ws.send_json({"type": "image:saved", "payload": images.save_rois_zip(payload.get("path"))})
+        return
+    if msg_type == "image:save_flows":
+        await ws.send_json({"type": "image:saved", "payload": images.save_flows_tif(payload.get("path"))})
+        return
+
+    # ----- mask edits -----
+    if msg_type == "mask:stroke":
+        state = masks.stroke(payload["points"], int(payload["radius"]), bool(payload.get("erase", False)))
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:remove_at":
+        state = masks.remove_at(int(payload["x"]), int(payload["y"]))
+        await ws.send_json({"type": "mask:updated", "payload": state})
+        return
+    if msg_type == "mask:clear":
+        await ws.send_json({"type": "mask:updated", "payload": masks.clear()})
+        return
+    if msg_type == "mask:undo":
+        await ws.send_json({"type": "mask:updated", "payload": masks.undo()})
+        return
+    if msg_type == "mask:redo":
+        await ws.send_json({"type": "mask:updated", "payload": masks.redo()})
+        return
+    if msg_type == "mask:request":
+        await _send_mask_state(ws)
+        return
+
+    # ----- models -----
+    if msg_type == "model:list":
+        await ws.send_json({"type": "model:listed", "payload": models.list_models()})
+        return
+    if msg_type == "model:run":
+        async def emit_progress(p: dict) -> None:
+            await ws.send_json({"type": "model:progress", "payload": p})
+
+        result = await models.run_segmentation(payload, emit_progress)
+        # Segmentation replaced the mask; reset history and broadcast new state.
+        masks.reset_history(result["imagePath"])
+        await ws.send_json({"type": "model:run_done", "payload": result})
+        await _send_mask_state(ws)
+        return
+    if msg_type == "model:train":
+        async def emit_train(p: dict) -> None:
+            await ws.send_json({"type": "model:progress", "payload": p})
+
+        result = await models.train_model(payload, emit_train)
+        await ws.send_json({"type": "model:train_done", "payload": result})
+        return
+
+    raise ValueError(f"Unknown message type: {msg_type}")
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket) -> None:
-    await manager.connect(ws)
+    await ws.accept()
     try:
         while True:
             data = await ws.receive_json()
             msg_type = data.get("type")
-
-            if msg_type == "ping":
-                await ws.send_json({"type": "pong"})
-
-            elif msg_type == "label:list":
-                await ws.send_json({
-                    "type": "label:listed",
-                    "payload": list(_labels.values()),
-                })
-
-            elif msg_type == "label:create":
-                payload = data.get("payload", {})
-                now = datetime.now(UTC).isoformat()
-                label = Label(
-                    id=str(uuid.uuid4()),
-                    name=payload.get("name", "Untitled"),
-                    color=payload.get("color", "#808080"),
-                    createdAt=now,
-                    updatedAt=now,
-                )
-                _labels[label.id] = label
-                await manager.broadcast({
-                    "type": "label:created",
-                    "payload": label.model_dump(),
-                })
-
-            elif msg_type == "label:update":
-                payload = data.get("payload", {})
-                label_id = payload.get("id")
-                if label_id and label_id in _labels:
-                    existing = _labels[label_id]
-                    now = datetime.now(UTC).isoformat()
-                    updated = existing.model_copy(
-                        update={
-                            k: v
-                            for k, v in payload.items()
-                            if k != "id" and v is not None
-                        }
-                        | {"updatedAt": now}
-                    )
-                    _labels[label_id] = updated
-                    await manager.broadcast({
-                        "type": "label:updated",
-                        "payload": updated.model_dump(),
-                    })
-                else:
-                    await ws.send_json({
-                        "type": "error",
-                        "payload": {"message": f"Label {label_id} not found"},
-                    })
-
-            elif msg_type == "label:delete":
-                payload = data.get("payload", {})
-                label_id = payload.get("id")
-                if label_id and label_id in _labels:
-                    del _labels[label_id]
-                    await manager.broadcast({
-                        "type": "label:deleted",
-                        "payload": {"id": label_id},
-                    })
-                else:
-                    await ws.send_json({
-                        "type": "error",
-                        "payload": {"message": f"Label {label_id} not found"},
-                    })
-
-            else:
-                await ws.send_json({
-                    "type": "error",
-                    "payload": {"message": f"Unknown message type: {msg_type}"},
-                })
-
+            payload = data.get("payload") or {}
+            try:
+                await _dispatch(ws, msg_type, payload)
+            except Exception as exc:
+                traceback.print_exc()
+                await _send_error(ws, f"{type(exc).__name__}: {exc}")
     except WebSocketDisconnect:
-        manager.disconnect(ws)
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
+        return
 
 
 def run() -> None:

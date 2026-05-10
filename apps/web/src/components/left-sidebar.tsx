@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FieldRow, SidebarSection } from "@/components/sidebar-section";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { useSessionStore } from "@/stores/session-store";
+import { useToolStore } from "@/stores/tool-store";
 
 const AXES = [
   { key: "P", label: "Position" },
@@ -142,55 +145,78 @@ export function LeftSidebar() {
         </div>
       </SidebarSection>
 
-      <SidebarSection title="Drawing">
-        <FieldRow label="Brush size">
-          <Select defaultValue="3">
-            <SelectButton size="sm">
-              <SelectValue />
-            </SelectButton>
-            <SelectContent>
-              <SelectItem value="1">1</SelectItem>
-              <SelectItem value="3">3</SelectItem>
-              <SelectItem value="5">5</SelectItem>
-              <SelectItem value="7">7</SelectItem>
-              <SelectItem value="9">9</SelectItem>
-            </SelectContent>
-          </Select>
-        </FieldRow>
-        <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <Checkbox defaultChecked />
-          <span className="font-medium uppercase">Masks on [X]</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <Checkbox />
-          <span>outlines on [Z]</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <Checkbox defaultChecked />
-          <span>single stroke</span>
-        </label>
-        <div className="rounded-md border border-dashed bg-muted/30 p-2">
-          <p className="mb-2 text-muted-foreground text-[10px] uppercase tracking-wide">
-            Delete multiple ROIs
-          </p>
-          <div className="flex flex-col gap-1.5">
-            <Button size="xs" variant="outline">
-              region-select
-            </Button>
-            <Button size="xs" variant="outline">
-              click-select
-            </Button>
-            <div className="flex gap-1.5">
-              <Button className="flex-1" size="xs" variant="secondary">
-                done
-              </Button>
-              <Button className="flex-1" size="xs" variant="outline">
-                cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      </SidebarSection>
+      <DrawingSection />
     </aside>
+  );
+}
+
+function DrawingSection() {
+  const { send } = useWebSocket();
+  const mask = useSessionStore((s) => s.mask);
+  const brushSize = useToolStore((s) => s.brushSize);
+  const setBrushSize = useToolStore((s) => s.setBrushSize);
+  const showMasks = useToolStore((s) => s.showMasks);
+  const toggleMasks = useToolStore((s) => s.toggleMasks);
+  const showOutlines = useToolStore((s) => s.showOutlines);
+  const toggleOutlines = useToolStore((s) => s.toggleOutlines);
+
+  return (
+    <SidebarSection title="Drawing">
+      <FieldRow label="Brush size">
+        <Select
+          value={String(brushSize)}
+          onValueChange={(v) => setBrushSize(Number(v))}
+        >
+          <SelectButton size="sm">
+            <SelectValue />
+          </SelectButton>
+          <SelectContent>
+            <SelectItem value="1">1</SelectItem>
+            <SelectItem value="3">3</SelectItem>
+            <SelectItem value="5">5</SelectItem>
+            <SelectItem value="7">7</SelectItem>
+            <SelectItem value="9">9</SelectItem>
+            <SelectItem value="13">13</SelectItem>
+            <SelectItem value="20">20</SelectItem>
+          </SelectContent>
+        </Select>
+      </FieldRow>
+      <label className="flex cursor-pointer items-center gap-2 text-xs">
+        <Checkbox checked={showMasks} onCheckedChange={() => toggleMasks()} />
+        <span className="font-medium uppercase">Masks on [X]</span>
+      </label>
+      <label className="flex cursor-pointer items-center gap-2 text-xs">
+        <Checkbox checked={showOutlines} onCheckedChange={() => toggleOutlines()} />
+        <span>outlines on [Z]</span>
+      </label>
+      <div className="flex gap-1.5">
+        <Button
+          className="flex-1"
+          disabled={!mask?.canUndo}
+          onClick={() => send({ type: "mask:undo" })}
+          size="xs"
+          variant="outline"
+        >
+          undo [⌃Z]
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={!mask?.canRedo}
+          onClick={() => send({ type: "mask:redo" })}
+          size="xs"
+          variant="outline"
+        >
+          redo [⌃Y]
+        </Button>
+      </div>
+      <Button
+        disabled={!mask || mask.nRois === 0}
+        onClick={() => send({ type: "mask:clear" })}
+        size="xs"
+        variant="outline"
+      >
+        clear all masks [⌃0]
+      </Button>
+    </SidebarSection>
   );
 }

@@ -19,6 +19,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FieldRow, SidebarSection } from "@/components/sidebar-section";
+import { TrainDialog } from "@/components/train-dialog";
+import { useWebSocket } from "@/hooks/use-websocket";
+import { useSessionStore } from "@/stores/session-store";
 
 function Collapsible({
   title,
@@ -53,45 +56,102 @@ function Collapsible({
 }
 
 export function RightSidebar() {
-  const [progress, setProgress] = useState(0);
-  const [running, setRunning] = useState(false);
+  const { send } = useWebSocket();
+  const [trainOpen, setTrainOpen] = useState(false);
+  const image = useSessionStore((s) => s.image);
+  const mask = useSessionStore((s) => s.mask);
+  const models = useSessionStore((s) => s.models);
+  const progress = useSessionStore((s) => s.progress);
+  const params = useSessionStore((s) => s.params);
+  const setParams = useSessionStore((s) => s.setParams);
+  const nRois = mask?.nRois ?? 0;
+
+  const running =
+    progress != null && progress.progress < 1 && progress.job === "run";
+  const training =
+    progress != null && progress.progress < 1 && progress.job === "train";
+  const percent = progress ? Math.round(progress.progress * 100) : 0;
 
   const runSegmentation = () => {
-    setRunning(true);
-    setProgress(0);
-    const id = window.setInterval(() => {
-      setProgress((p) => {
-        if (p >= 100) {
-          window.clearInterval(id);
-          setRunning(false);
-          return 100;
-        }
-        return p + 8;
-      });
-    }, 120);
+    if (!image) return;
+    send({
+      type: "model:run",
+      payload: {
+        model: params.model,
+        imagePath: image.path,
+        diameter: params.diameter,
+        flowThreshold: params.flowThreshold,
+        cellprobThreshold: params.cellprobThreshold,
+        niter: params.niter,
+        minSize: params.minSize,
+        anisotropy: params.anisotropy,
+        useGpu: params.useGpu,
+      },
+    });
   };
+
+  const builtins = models.filter((m) => m.source === "builtin");
+  const customs = models.filter((m) => m.source === "custom");
 
   return (
     <aside className="flex w-80 shrink-0 flex-col gap-3 overflow-y-auto border-border border-l bg-background/50 p-3">
       <SidebarSection title="Segmentation">
         <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <Checkbox defaultChecked />
+          <Checkbox
+            checked={params.useGpu}
+            onCheckedChange={(c) => setParams({ useGpu: c === true })}
+          />
           <Cpu className="size-3 text-muted-foreground" />
           <span>use GPU</span>
         </label>
+        <FieldRow label="model">
+          <Select
+            value={params.model}
+            onValueChange={(v) => setParams({ model: v as string })}
+          >
+            <SelectButton size="sm">
+              <SelectValue />
+            </SelectButton>
+            <SelectContent>
+              {builtins.map((m) => (
+                <SelectItem key={m.name} value={m.name}>
+                  {m.name}
+                </SelectItem>
+              ))}
+              {customs.length > 0 && (
+                <>
+                  <div className="my-1 h-px bg-border" />
+                  {customs.map((m) => (
+                    <SelectItem key={m.name} value={m.name}>
+                      {m.name}{" "}
+                      <span className="text-muted-foreground text-[10px]">
+                        (custom)
+                      </span>
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+            </SelectContent>
+          </Select>
+        </FieldRow>
         <Button
           className="w-full"
+          disabled={!image || running || training}
           loading={running}
           onClick={runSegmentation}
           size="sm"
         >
           <Sparkles />
-          run CPSAM
+          run {params.model}
         </Button>
-        <Progress max={100} value={progress}>
+        <Progress max={100} value={percent}>
           <div className="flex items-center justify-between">
             <ProgressLabel className="text-xs">
-              {running ? "segmenting…" : "0 ROIs"}
+              {running
+                ? progress?.message || "segmenting…"
+                : training
+                  ? progress?.message || "training…"
+                  : `${nRois} ROIs`}
             </ProgressLabel>
             <ProgressValue className="text-muted-foreground text-xs" />
           </div>
@@ -103,92 +163,106 @@ export function RightSidebar() {
         <Collapsible title="additional settings">
           <FieldRow label="diameter">
             <Input
-              size="sm"
-              defaultValue="30"
+              defaultValue={params.diameter ?? ""}
+              onBlur={(e) => {
+                const v = e.currentTarget.value.trim();
+                setParams({ diameter: v === "" ? null : Number(v) });
+              }}
               placeholder="auto"
+              size="sm"
             />
           </FieldRow>
           <FieldRow label="flow_thresh">
-            <Input size="sm" defaultValue="0.4" />
+            <Input
+              defaultValue={params.flowThreshold}
+              onBlur={(e) =>
+                setParams({ flowThreshold: Number(e.currentTarget.value) })
+              }
+              size="sm"
+            />
           </FieldRow>
           <FieldRow label="cellprob_thresh">
-            <Input size="sm" defaultValue="0.0" />
+            <Input
+              defaultValue={params.cellprobThreshold}
+              onBlur={(e) =>
+                setParams({ cellprobThreshold: Number(e.currentTarget.value) })
+              }
+              size="sm"
+            />
           </FieldRow>
           <FieldRow label="niter">
-            <Input size="sm" defaultValue="0" />
+            <Input
+              defaultValue={params.niter}
+              onBlur={(e) =>
+                setParams({ niter: Number(e.currentTarget.value) })
+              }
+              size="sm"
+            />
           </FieldRow>
           <FieldRow label="min_size">
-            <Input size="sm" defaultValue="15" />
+            <Input
+              defaultValue={params.minSize}
+              onBlur={(e) =>
+                setParams({ minSize: Number(e.currentTarget.value) })
+              }
+              size="sm"
+            />
           </FieldRow>
           <FieldRow label="anisotropy">
-            <Input size="sm" defaultValue="1.0" />
+            <Input
+              defaultValue={params.anisotropy}
+              onBlur={(e) =>
+                setParams({ anisotropy: Number(e.currentTarget.value) })
+              }
+              size="sm"
+            />
           </FieldRow>
         </Collapsible>
       </SidebarSection>
 
       <SidebarSection title="User-trained models">
-        <div className="flex gap-1.5">
-          <Select defaultValue="custom">
-            <SelectButton className="flex-1" size="sm">
-              <SelectValue />
-            </SelectButton>
-            <SelectContent>
-              <SelectItem value="custom">custom models</SelectItem>
-              <SelectItem value="cyto3">cyto3</SelectItem>
-              <SelectItem value="nuclei">nuclei</SelectItem>
-              <SelectItem value="tissuenet">tissuenet</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button size="sm" variant="outline">
-            <Play />
-            run
-          </Button>
-        </div>
-        <p className="text-muted-foreground text-[11px] leading-relaxed">
-          Train your own models in the{" "}
-          <Badge size="sm" variant="outline">
-            Models
-          </Badge>{" "}
-          menu, then choose them here.
-        </p>
-      </SidebarSection>
-
-      <SidebarSection title="Image filtering">
-        <div className="flex gap-1.5">
-          <Button className="flex-1" size="sm" variant="outline">
-            none
-          </Button>
-          <Button className="flex-1" size="sm" variant="outline">
-            filter
-          </Button>
-        </div>
-        <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <Checkbox defaultChecked />
-          <span>save restored/filtered image</span>
-        </label>
-
-        <Collapsible title="custom filter settings">
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: "sharpen radius", value: "0" },
-              { label: "smooth radius", value: "0" },
-              { label: "tile_norm size", value: "0" },
-              { label: "tile smooth3D", value: "0" },
-            ].map((f) => (
-              <div className="flex flex-col gap-1" key={f.label}>
-                <label className="text-muted-foreground text-[10px]">
-                  {f.label}
-                </label>
-                <Input defaultValue={f.value} size="sm" />
+        {customs.length === 0 ? (
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            None yet. Train one on image+masks pairs in a folder.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {customs.map((m) => (
+              <div
+                className="flex items-center justify-between gap-1.5 rounded-md border bg-card px-2 py-1 text-xs"
+                key={m.name}
+              >
+                <span className="truncate font-mono">{m.name}</span>
+                <Button
+                  disabled={!image || running || training}
+                  onClick={() => {
+                    setParams({ model: m.name });
+                    runSegmentation();
+                  }}
+                  size="xs"
+                  variant="outline"
+                >
+                  <Play />
+                  run
+                </Button>
               </div>
             ))}
           </div>
-          <label className="flex cursor-pointer items-center gap-2 text-xs">
-            <Checkbox defaultChecked />
-            <span>norm3D</span>
-          </label>
-        </Collapsible>
+        )}
+        <Button
+          disabled={training}
+          onClick={() => setTrainOpen(true)}
+          size="sm"
+          variant="outline"
+        >
+          train new model…
+        </Button>
+        <p className="text-muted-foreground text-[11px] leading-relaxed">
+          Training runs server-side. Pick a folder of <Badge size="sm" variant="outline">image + image_masks</Badge> pairs.
+        </p>
       </SidebarSection>
+
+      <TrainDialog open={trainOpen} onOpenChange={setTrainOpen} />
     </aside>
   );
 }

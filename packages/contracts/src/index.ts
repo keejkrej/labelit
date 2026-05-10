@@ -3,14 +3,40 @@ export {
   MessageTypeSchema,
   type MessageType,
 
-  // Domain
-  LabelSchema,
-  type Label,
+  // Filesystem
+  FsEntryKindSchema,
+  type FsEntryKind,
+  FsEntrySchema,
+  type FsEntry,
+  ListDirPayload,
+  DirListedPayload,
+  RootsListedPayload,
+  HomeResolvedPayload,
 
-  // Client payloads
-  CreateLabelPayload,
-  UpdateLabelPayload,
-  DeleteLabelPayload,
+  // Images
+  OpenImagePayload,
+  OpenMasksPayload,
+  ImageMetaSchema,
+  type ImageMeta,
+  SavePathPayload,
+  SavedPayload,
+
+  // Masks
+  PointSchema,
+  type Point,
+  StrokePayload,
+  RemoveAtPayload,
+  MaskStateSchema,
+  type MaskState,
+
+  // Models
+  ModelInfoSchema,
+  type ModelInfo,
+  RunModelPayload,
+  TrainModelPayload,
+  ProgressPayload,
+  RunDonePayload,
+  TrainDonePayload,
 
   // Envelopes
   ClientMessageSchema,
