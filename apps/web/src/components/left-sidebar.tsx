@@ -22,9 +22,9 @@ const AXES = [
 function AxisControl({ axisKey, label }: { axisKey: string; label: string }) {
   const [value, setValue] = useState(0);
   return (
-    <div className="grid grid-cols-[1.25rem_1.5rem_1fr_1.5rem_2.5rem] items-center gap-1.5">
+    <div className="flex min-w-0 items-center gap-1.5">
       <span
-        className="font-mono font-semibold text-foreground text-xs"
+        className="w-4 shrink-0 font-mono font-semibold text-foreground text-xs"
         title={label}
       >
         {axisKey}
@@ -38,6 +38,7 @@ function AxisControl({ axisKey, label }: { axisKey: string; label: string }) {
         <ChevronLeft />
       </Button>
       <Slider
+        className="min-w-0 flex-1 [&_[data-slot=slider-control]]:min-w-0"
         max={100}
         onValueChange={(v) => setValue(Array.isArray(v) ? v[0] : v)}
         value={value}
@@ -50,8 +51,8 @@ function AxisControl({ axisKey, label }: { axisKey: string; label: string }) {
       >
         <ChevronRight />
       </Button>
-      <span className="text-right text-muted-foreground text-xs tabular-nums">
-        {value}/100
+      <span className="w-10 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
+        {value}
       </span>
     </div>
   );
@@ -74,7 +75,12 @@ function ColorChannelSlider({
       >
         {label}
       </span>
-      <Slider defaultValue={defaultRange} max={255} min={0}>
+      <Slider
+        className="min-w-0 [&_[data-slot=slider-control]]:min-w-0"
+        defaultValue={defaultRange}
+        max={255}
+        min={0}
+      >
         <SliderPrimitive.Value className="sr-only" />
       </Slider>
     </div>
