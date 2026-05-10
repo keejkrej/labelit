@@ -98,7 +98,7 @@ function AxisControl({ id, axisKey, label }: { id: string; axisKey: string; labe
         <ChevronRight />
       </Button>
       <span className="w-10 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
-        {values[localIndex] ?? 0}
+        {values[localIndex] !== undefined ? parseInt(values[localIndex], 10) : 0}
       </span>
     </div>
   );
