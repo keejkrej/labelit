@@ -9,11 +9,36 @@ export type Tool =
   | "select-click"
   | "select-region";
 
+export type CellacdcMode =
+  | "viewer"
+  | "segmentation-tracking"
+  | "cell-cycle"
+  | "custom-annotations";
+
+export type CellacdcTool =
+  | "navigate"
+  | "inspect"
+  | "paint"
+  | "delete"
+  | "track"
+  | "annotate";
+
 interface ToolState {
   tool: Tool;
   brushSize: number;
   showMasks: boolean;
   showOutlines: boolean;
+  showLabels: boolean;
+  showMissingCells: boolean;
+  showNewCells: boolean;
+  showTrackingLinks: boolean;
+  autoContrast: boolean;
+
+  cellacdcMode: CellacdcMode;
+  cellacdcTool: CellacdcTool;
+  currentFrame: number;
+  currentZ: number;
+  projection: "single" | "max" | "mean";
 
   // Alt+click merge interaction state (cross-tool).
   pendingMerge: Point | null;
@@ -34,6 +59,17 @@ interface ToolState {
   toggleOutlines: () => void;
   setShowMasks: (v: boolean) => void;
   setShowOutlines: (v: boolean) => void;
+  toggleLabels: () => void;
+  toggleMissingCells: () => void;
+  toggleNewCells: () => void;
+  toggleTrackingLinks: () => void;
+  setAutoContrast: (v: boolean) => void;
+
+  setCellacdcMode: (mode: CellacdcMode) => void;
+  setCellacdcTool: (tool: CellacdcTool) => void;
+  setCurrentFrame: (frame: number) => void;
+  setCurrentZ: (z: number) => void;
+  setProjection: (projection: "single" | "max" | "mean") => void;
 
   setPendingMerge: (p: Point | null) => void;
 
@@ -53,6 +89,17 @@ export const useToolStore = create<ToolState>((set) => ({
   brushSize: 3,
   showMasks: true,
   showOutlines: false,
+  showLabels: true,
+  showMissingCells: true,
+  showNewCells: true,
+  showTrackingLinks: true,
+  autoContrast: true,
+
+  cellacdcMode: "segmentation-tracking",
+  cellacdcTool: "navigate",
+  currentFrame: 0,
+  currentZ: 0,
+  projection: "single",
 
   pendingMerge: null,
   pickedPoints: [],
@@ -74,6 +121,17 @@ export const useToolStore = create<ToolState>((set) => ({
   toggleOutlines: () => set((s) => ({ showOutlines: !s.showOutlines })),
   setShowMasks: (showMasks) => set({ showMasks }),
   setShowOutlines: (showOutlines) => set({ showOutlines }),
+  toggleLabels: () => set((s) => ({ showLabels: !s.showLabels })),
+  toggleMissingCells: () => set((s) => ({ showMissingCells: !s.showMissingCells })),
+  toggleNewCells: () => set((s) => ({ showNewCells: !s.showNewCells })),
+  toggleTrackingLinks: () => set((s) => ({ showTrackingLinks: !s.showTrackingLinks })),
+  setAutoContrast: (autoContrast) => set({ autoContrast }),
+
+  setCellacdcMode: (cellacdcMode) => set({ cellacdcMode }),
+  setCellacdcTool: (cellacdcTool) => set({ cellacdcTool }),
+  setCurrentFrame: (currentFrame) => set({ currentFrame }),
+  setCurrentZ: (currentZ) => set({ currentZ }),
+  setProjection: (projection) => set({ projection }),
 
   setPendingMerge: (pendingMerge) => set({ pendingMerge }),
 

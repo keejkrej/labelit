@@ -49,6 +49,7 @@ export function CanvasArea() {
   const brushSize = useToolStore((s) => s.brushSize);
   const showMasks = useToolStore((s) => s.showMasks);
   const showOutlines = useToolStore((s) => s.showOutlines);
+  const showLabels = useToolStore((s) => s.showLabels);
 
   const pendingMerge = useToolStore((s) => s.pendingMerge);
   const setPendingMerge = useToolStore((s) => s.setPendingMerge);
@@ -157,8 +158,27 @@ export function CanvasArea() {
         ctx.lineWidth = Math.max(1, image.width * 0.001);
         ctx.stroke();
       }
+      if (showLabels) {
+        const points = roi.contours[0];
+        if (points?.length) {
+          const center = points.reduce(
+            (acc, point) => ({ x: acc.x + point[0], y: acc.y + point[1] }),
+            { x: 0, y: 0 },
+          );
+          const x = center.x / points.length;
+          const y = center.y / points.length;
+          ctx.font = `${Math.max(10, image.width * 0.018)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+          ctx.lineWidth = Math.max(2, image.width * 0.003);
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+          ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.strokeText(String(roi.id), x, y);
+          ctx.fillText(String(roi.id), x, y);
+        }
+      }
     }
-  }, [mask, image, showMasks, showOutlines]);
+  }, [mask, image, showMasks, showOutlines, showLabels]);
 
   const isPanningRef = useRef(false);
   const lastPanPointRef = useRef<{ x: number; y: number } | null>(null);

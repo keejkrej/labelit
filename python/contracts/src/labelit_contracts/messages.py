@@ -40,10 +40,10 @@ class OpenSeriesImagePayload(BaseModel):
     folder: str
     subfolder_template: str | None = None
     filename_template: str | None = None
-    position: str
-    time: str
-    channel: str
-    z: str
+    position: int
+    time: int
+    channel: int
+    z: int
 
 # Images
 
@@ -111,8 +111,13 @@ class MergeAtPayload(BaseModel):
 class ModelInfo(BaseModel):
     name: str
     source: Literal["builtin", "custom"]
+    available: bool | None = None
+    unsupportedReason: str | None = None
 
-class RunModelPayload(BaseModel):
+
+class CellposeRunModelPayload(BaseModel):
+    model_config = {"extra": "forbid"}
+
     model: str
     imagePath: str
     diameter: float | None = None
@@ -123,6 +128,38 @@ class RunModelPayload(BaseModel):
     anisotropy: float | None = None
     useGpu: bool | None = None
 
+
+class CellacdcSegmentationModelPayload(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    diameter: float | None = None
+    flowThreshold: float | None = None
+    cellprobThreshold: float | None = None
+    niter: int | None = Field(default=None, ge=0)
+    minSize: int | None = Field(default=None, ge=0)
+    anisotropy: float | None = None
+
+
+class CellacdcRunModelPayload(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    model: str
+    imagePath: str
+    useGpu: bool | None = None
+    diameter: float | None = None
+    flowThreshold: float | None = None
+    cellprobThreshold: float | None = None
+    niter: int | None = Field(default=None, ge=0)
+    minSize: int | None = Field(default=None, ge=0)
+    anisotropy: float | None = None
+    initParams: dict[str, Any] | None = None
+    segmentParams: dict[str, Any] | None = None
+    segmentation: CellacdcSegmentationModelPayload | None = None
+
+
+RunModelPayload = CellposeRunModelPayload | CellacdcRunModelPayload
+
+
 class TrainModelPayload(BaseModel):
     baseModel: str
     trainDir: str
@@ -132,6 +169,7 @@ class TrainModelPayload(BaseModel):
     weightDecay: float | None = Field(default=None, ge=0)
     batchSize: int | None = Field(default=None, gt=0)
     useGpu: bool | None = None
+
 
 class ProgressPayload(BaseModel):
     job: Literal["run", "train"]
@@ -146,6 +184,55 @@ class RunDonePayload(BaseModel):
 class TrainDonePayload(BaseModel):
     modelName: str
     modelPath: str
+
+
+# Cell-ACDC
+
+class CellacdcTrackFramePayload(BaseModel):
+    imagePath: str | None = None
+    IoAThreshold: float | None = Field(default=None, ge=0, le=1)
+
+
+class CellacdcTrackSeriesPayload(BaseModel):
+    imagePath: str | None = None
+    IoAThreshold: float | None = Field(default=None, ge=0, le=1)
+
+
+CellacdcAnnotationKind = Literal[
+    "excluded",
+    "dead",
+    "unknownHistory",
+    "motherBudLink",
+]
+
+
+class CellacdcAnnotationSetPayload(BaseModel):
+    imagePath: str | None = None
+    frame: int | None = Field(default=None, ge=0)
+    objectId: int = Field(gt=0)
+    annotation: CellacdcAnnotationKind
+    value: bool | None = None
+    targetObjectId: int | None = Field(default=None, gt=0)
+
+
+class CellacdcAnnotationClearPayload(BaseModel):
+    imagePath: str | None = None
+    frame: int | None = Field(default=None, ge=0)
+    objectId: int | None = Field(default=None, gt=0)
+    annotation: CellacdcAnnotationKind | None = None
+
+
+class CellacdcObjectAnnotation(BaseModel):
+    excluded: bool | None = None
+    dead: bool | None = None
+    unknownHistory: bool | None = None
+    motherBudTarget: int | None = Field(default=None, gt=0)
+
+
+class CellacdcAnnotationsUpdatedPayload(BaseModel):
+    imagePath: str
+    frame: int = Field(ge=0)
+    annotations: dict[str, CellacdcObjectAnnotation]
 
 # Client -> Server
 
@@ -245,6 +332,22 @@ class ClientMessageModelTrain(ClientMessageBase):
     type: Literal["model:train"]
     payload: TrainModelPayload
 
+class ClientMessageCellacdcTrackFrame(ClientMessageBase):
+    type: Literal["cellacdc:track_frame"]
+    payload: CellacdcTrackFramePayload | None = None
+
+class ClientMessageCellacdcTrackSeries(ClientMessageBase):
+    type: Literal["cellacdc:track_series"]
+    payload: CellacdcTrackSeriesPayload | None = None
+
+class ClientMessageCellacdcAnnotationSet(ClientMessageBase):
+    type: Literal["cellacdc:annotation:set"]
+    payload: CellacdcAnnotationSetPayload
+
+class ClientMessageCellacdcAnnotationClear(ClientMessageBase):
+    type: Literal["cellacdc:annotation:clear"]
+    payload: CellacdcAnnotationClearPayload | None = None
+
 class ClientMessagePing(ClientMessageBase):
     type: Literal["ping"]
 
@@ -274,6 +377,10 @@ ClientMessage = Annotated[
     ClientMessageModelList |
     ClientMessageModelRun |
     ClientMessageModelTrain |
+    ClientMessageCellacdcTrackFrame |
+    ClientMessageCellacdcTrackSeries |
+    ClientMessageCellacdcAnnotationSet |
+    ClientMessageCellacdcAnnotationClear |
     ClientMessagePing,
     Field(discriminator="type")
 ]
@@ -289,7 +396,7 @@ class SeriesDatasetPayload(BaseModel):
     subfolder_template: str
     filename_template: str
     placeholders: list[str]
-    axes: dict[str, list[str]]
+    axes: dict[str, int]
 
 class ServerMessageBase(BaseModel):
     type: str
@@ -342,6 +449,10 @@ class ServerMessageModelTrainDone(ServerMessageBase):
     type: Literal["model:train_done"]
     payload: TrainDonePayload
 
+class ServerMessageCellacdcAnnotationsUpdated(ServerMessageBase):
+    type: Literal["cellacdc:annotations_updated"]
+    payload: CellacdcAnnotationsUpdatedPayload
+
 class ServerMessagePong(ServerMessageBase):
     type: Literal["pong"]
 
@@ -365,6 +476,7 @@ ServerMessage = Annotated[
     ServerMessageModelProgress |
     ServerMessageModelRunDone |
     ServerMessageModelTrainDone |
+    ServerMessageCellacdcAnnotationsUpdated |
     ServerMessagePong |
     ServerMessageError,
     Field(discriminator="type")

@@ -20,6 +20,7 @@ export const MessageTypeSchema = z.enum([
 
   // Image IO (client → server)
   "image:open",
+  "image:open_series",
   "image:open_masks",
   "image:save_masks",
   "image:save_outlines",
@@ -52,6 +53,13 @@ export const MessageTypeSchema = z.enum([
   "model:progress",
   "model:run_done",
   "model:train_done",
+
+  // Cell-ACDC core workflows
+  "cellacdc:track_frame",
+  "cellacdc:track_series",
+  "cellacdc:annotation:set",
+  "cellacdc:annotation:clear",
+  "cellacdc:annotations_updated",
 
   // Bidirectional
   "ping",
@@ -228,10 +236,12 @@ export const ModelInfoSchema = z.object({
   name: z.string(),
   // "builtin" → shipped with cellpose; "custom" → user-trained
   source: z.enum(["builtin", "custom"]),
+  available: z.boolean().optional(),
+  unsupportedReason: z.string().optional(),
 });
 export type ModelInfo = z.infer<typeof ModelInfoSchema>;
 
-export const RunModelPayload = z.object({
+export const CellposeRunModelPayload = z.object({
   model: z.string(),
   imagePath: z.string(),
   diameter: z.number().nullable().optional(),
@@ -241,7 +251,33 @@ export const RunModelPayload = z.object({
   minSize: z.number().int().nonnegative().optional(),
   anisotropy: z.number().optional(),
   useGpu: z.boolean().optional(),
-});
+}).strict();
+export type CellposeRunModelPayload = z.infer<typeof CellposeRunModelPayload>;
+
+export const CellacdcRunModelPayload = z.object({
+  model: z.string(),
+  imagePath: z.string(),
+  useGpu: z.boolean().optional(),
+  diameter: z.number().nullable().optional(),
+  flowThreshold: z.number().optional(),
+  cellprobThreshold: z.number().optional(),
+  niter: z.number().int().nonnegative().optional(),
+  minSize: z.number().int().nonnegative().optional(),
+  anisotropy: z.number().optional(),
+  initParams: z.record(z.string(), z.unknown()).optional(),
+  segmentParams: z.record(z.string(), z.unknown()).optional(),
+  segmentation: z.object({
+    diameter: z.number().nullable().optional(),
+    flowThreshold: z.number().optional(),
+    cellprobThreshold: z.number().optional(),
+    niter: z.number().int().nonnegative().optional(),
+    minSize: z.number().int().nonnegative().optional(),
+    anisotropy: z.number().optional(),
+  }).strict().optional(),
+}).strict();
+export type CellacdcRunModelPayload = z.infer<typeof CellacdcRunModelPayload>;
+
+export const RunModelPayload = z.union([CellposeRunModelPayload, CellacdcRunModelPayload]);
 export type RunModelPayload = z.infer<typeof RunModelPayload>;
 
 export const TrainModelPayload = z.object({
@@ -278,6 +314,63 @@ export const TrainDonePayload = z.object({
 export type TrainDonePayload = z.infer<typeof TrainDonePayload>;
 
 // ---------------------------------------------------------------------------
+// Cell-ACDC tracking + annotations
+// ---------------------------------------------------------------------------
+
+export const CellacdcTrackFramePayload = z.object({
+  imagePath: z.string().optional(),
+  IoAThreshold: z.number().min(0).max(1).optional(),
+});
+export type CellacdcTrackFramePayload = z.infer<typeof CellacdcTrackFramePayload>;
+
+export const CellacdcTrackSeriesPayload = z.object({
+  imagePath: z.string().optional(),
+  IoAThreshold: z.number().min(0).max(1).optional(),
+});
+export type CellacdcTrackSeriesPayload = z.infer<typeof CellacdcTrackSeriesPayload>;
+
+export const CellacdcAnnotationKindSchema = z.enum([
+  "excluded",
+  "dead",
+  "unknownHistory",
+  "motherBudLink",
+]);
+export type CellacdcAnnotationKind = z.infer<typeof CellacdcAnnotationKindSchema>;
+
+export const CellacdcAnnotationSetPayload = z.object({
+  imagePath: z.string().optional(),
+  frame: z.number().int().nonnegative().optional(),
+  objectId: z.number().int().positive(),
+  annotation: CellacdcAnnotationKindSchema,
+  value: z.boolean().optional(),
+  targetObjectId: z.number().int().positive().optional(),
+});
+export type CellacdcAnnotationSetPayload = z.infer<typeof CellacdcAnnotationSetPayload>;
+
+export const CellacdcAnnotationClearPayload = z.object({
+  imagePath: z.string().optional(),
+  frame: z.number().int().nonnegative().optional(),
+  objectId: z.number().int().positive().optional(),
+  annotation: CellacdcAnnotationKindSchema.optional(),
+});
+export type CellacdcAnnotationClearPayload = z.infer<typeof CellacdcAnnotationClearPayload>;
+
+export const CellacdcObjectAnnotationSchema = z.object({
+  excluded: z.boolean().optional(),
+  dead: z.boolean().optional(),
+  unknownHistory: z.boolean().optional(),
+  motherBudTarget: z.number().int().positive().optional(),
+});
+export type CellacdcObjectAnnotation = z.infer<typeof CellacdcObjectAnnotationSchema>;
+
+export const CellacdcAnnotationsUpdatedPayload = z.object({
+  imagePath: z.string(),
+  frame: z.number().int().nonnegative(),
+  annotations: z.record(z.string(), CellacdcObjectAnnotationSchema),
+});
+export type CellacdcAnnotationsUpdatedPayload = z.infer<typeof CellacdcAnnotationsUpdatedPayload>;
+
+// ---------------------------------------------------------------------------
 // Generic message envelope
 // ---------------------------------------------------------------------------
 
@@ -310,6 +403,11 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("model:list") }),
   z.object({ type: z.literal("model:run"), payload: RunModelPayload }),
   z.object({ type: z.literal("model:train"), payload: TrainModelPayload }),
+  // Cell-ACDC
+  z.object({ type: z.literal("cellacdc:track_frame"), payload: CellacdcTrackFramePayload.optional() }),
+  z.object({ type: z.literal("cellacdc:track_series"), payload: CellacdcTrackSeriesPayload.optional() }),
+  z.object({ type: z.literal("cellacdc:annotation:set"), payload: CellacdcAnnotationSetPayload }),
+  z.object({ type: z.literal("cellacdc:annotation:clear"), payload: CellacdcAnnotationClearPayload.optional() }),
   // misc
   z.object({ type: z.literal("ping") }),
 ]);
@@ -343,6 +441,8 @@ export const ServerMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("model:progress"), payload: ProgressPayload }),
   z.object({ type: z.literal("model:run_done"), payload: RunDonePayload }),
   z.object({ type: z.literal("model:train_done"), payload: TrainDonePayload }),
+  // Cell-ACDC
+  z.object({ type: z.literal("cellacdc:annotations_updated"), payload: CellacdcAnnotationsUpdatedPayload }),
   // misc
   z.object({ type: z.literal("pong") }),
   z.object({ type: z.literal("error"), payload: z.object({ message: z.string() }) }),

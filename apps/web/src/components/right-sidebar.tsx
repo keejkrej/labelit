@@ -56,7 +56,7 @@ function Collapsible({
 }
 
 export function RightSidebar() {
-  const { send } = useWebSocket();
+  const { send, route } = useWebSocket();
   const [trainOpen, setTrainOpen] = useState(false);
   const image = useSessionStore((s) => s.image);
   const mask = useSessionStore((s) => s.mask);
@@ -65,6 +65,7 @@ export function RightSidebar() {
   const params = useSessionStore((s) => s.params);
   const setParams = useSessionStore((s) => s.setParams);
   const nRois = mask?.nRois ?? 0;
+  const isCellacdc = route === "cellacdc";
 
   const running =
     progress != null && progress.progress < 1 && progress.job === "run";
@@ -74,20 +75,33 @@ export function RightSidebar() {
 
   const runSegmentation = () => {
     if (!image) return;
-    send({
-      type: "model:run",
-      payload: {
-        model: params.model,
-        imagePath: image.path,
-        diameter: params.diameter,
-        flowThreshold: params.flowThreshold,
-        cellprobThreshold: params.cellprobThreshold,
-        niter: params.niter,
-        minSize: params.minSize,
-        anisotropy: params.anisotropy,
-        useGpu: params.useGpu,
-      },
-    });
+    const payload =
+      route === "cellacdc"
+        ? {
+            model: params.model,
+            imagePath: image.path,
+            useGpu: params.useGpu,
+            segmentation: {
+              diameter: params.diameter,
+              flowThreshold: params.flowThreshold,
+              cellprobThreshold: params.cellprobThreshold,
+              niter: params.niter,
+              minSize: params.minSize,
+              anisotropy: params.anisotropy,
+            },
+          }
+        : {
+            model: params.model,
+            imagePath: image.path,
+            diameter: params.diameter,
+            flowThreshold: params.flowThreshold,
+            cellprobThreshold: params.cellprobThreshold,
+            niter: params.niter,
+            minSize: params.minSize,
+            anisotropy: params.anisotropy,
+            useGpu: params.useGpu,
+          };
+    send({ type: "model:run", payload });
   };
 
   const builtins = models.filter((m) => m.source === "builtin");
@@ -220,49 +234,50 @@ export function RightSidebar() {
         </Collapsible>
       </SidebarSection>
 
-      <SidebarSection title="User-trained models">
-        {customs.length === 0 ? (
-          <p className="text-muted-foreground text-[11px] leading-relaxed">
-            None yet. Train one on image+masks pairs in a folder.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {customs.map((m) => (
-              <div
-                className="flex items-center justify-between gap-1.5 rounded-md border bg-card px-2 py-1 text-xs"
-                key={m.name}
-              >
-                <span className="truncate font-mono">{m.name}</span>
-                <Button
-                  disabled={!image || running || training}
-                  onClick={() => {
-                    setParams({ model: m.name });
-                    runSegmentation();
-                  }}
-                  size="xs"
-                  variant="outline"
+      {!isCellacdc && (
+        <SidebarSection title="User-trained models">
+          {customs.length === 0 ? (
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              None yet. Train one on image+masks pairs in a folder.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {customs.map((m) => (
+                <div
+                  className="flex items-center justify-between gap-1.5 rounded-md border bg-card px-2 py-1 text-xs"
+                  key={m.name}
                 >
-                  <Play />
-                  run
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-        <Button
-          disabled={training}
-          onClick={() => setTrainOpen(true)}
-          size="sm"
-          variant="outline"
-        >
-          train new model…
-        </Button>
-        <p className="text-muted-foreground text-[11px] leading-relaxed">
-          Training runs server-side. Pick a folder of <Badge size="sm" variant="outline">image + image_masks</Badge> pairs.
-        </p>
-      </SidebarSection>
-
-      <TrainDialog open={trainOpen} onOpenChange={setTrainOpen} />
+                  <span className="truncate font-mono">{m.name}</span>
+                  <Button
+                    disabled={!image || running || training}
+                    onClick={() => {
+                      setParams({ model: m.name });
+                      runSegmentation();
+                    }}
+                    size="xs"
+                    variant="outline"
+                  >
+                    <Play />
+                    run
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button
+            disabled={training}
+            onClick={() => setTrainOpen(true)}
+            size="sm"
+            variant="outline"
+          >
+            train new model…
+          </Button>
+          <p className="text-muted-foreground text-[11px] leading-relaxed">
+            Training runs server-side. Pick a folder of <Badge size="sm" variant="outline">image + image_masks</Badge> pairs.
+          </p>
+        </SidebarSection>
+      )}
+      {!isCellacdc && <TrainDialog open={trainOpen} onOpenChange={setTrainOpen} />}
     </aside>
   );
 }

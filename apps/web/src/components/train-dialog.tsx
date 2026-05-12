@@ -29,7 +29,7 @@ export function TrainDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { send } = useWebSocket();
+  const { send, route } = useWebSocket();
   const openBrowser = useFsStore((s) => s.openBrowser);
   const models = useSessionStore((s) => s.models);
 
@@ -42,6 +42,7 @@ export function TrainDialog({
   const [useGpu, setUseGpu] = useState<boolean>(true);
 
   const builtins = models.filter((m) => m.source === "builtin");
+  if (route === "cellacdc") return null;
 
   const pickDir = () => {
     openBrowser("dir", { onPick: setTrainDir });

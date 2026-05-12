@@ -178,7 +178,19 @@ def get(path: str | None = None) -> LoadedImage | None:
     return _cache.get(_abs(path))
 
 
-def attach_run_result(image_path: str, masks: np.ndarray, flows: list[Any]) -> None:
+def iter_loaded() -> list[LoadedImage]:
+    return list(_cache.values())
+
+
+def set_current(path: str) -> None:
+    global _current_path
+    abs_path = _abs(path)
+    if abs_path not in _cache:
+        raise RuntimeError(f"Image not loaded: {abs_path}")
+    _current_path = abs_path
+
+
+def attach_run_result(image_path: str, masks: np.ndarray, flows: list[Any] | None) -> None:
     """Called by models.run_segmentation to keep result available for save handlers."""
     loaded = _cache.get(_abs(image_path))
     if loaded is None:

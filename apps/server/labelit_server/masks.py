@@ -283,6 +283,18 @@ def current_state() -> dict:
     return _state(loaded)
 
 
+def replace_current_mask(mask: np.ndarray, path: str | None = None, push_history: bool = True) -> dict:
+    loaded = images.get(path)
+    if loaded is None:
+        raise RuntimeError("No image loaded.")
+    if push_history and loaded.masks is not None:
+        _push_snapshot(loaded)
+    loaded.masks = mask
+    if path is not None:
+        images.set_current(path)
+    return _state(loaded)
+
+
 def reset_history(path: str | None = None) -> None:
     if path is None:
         _history.clear()

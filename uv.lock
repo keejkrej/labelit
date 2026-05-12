@@ -17,7 +17,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
+exclude-newer = "2026-05-05T12:59:23.2153052Z"
 exclude-newer-span = "P7D"
 
 [manifest]
@@ -1193,6 +1193,7 @@ name = "labelit-server"
 version = "0.2.0"
 source = { editable = "apps/server" }
 dependencies = [
+    { name = "cellacdc" },
     { name = "cellpose" },
     { name = "fastapi" },
     { name = "imageio" },
@@ -1207,6 +1208,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cellacdc", editable = "cellacdc" },
     { name = "cellpose", editable = "cellpose" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "imageio", specifier = ">=2.34" },

@@ -14,11 +14,43 @@ import { useFsStore } from "../stores/fs-store";
 import { useSessionStore } from "../stores/session-store";
 
 type ConnectionStatus = "disconnected" | "connecting" | "connected";
+export type WebsocketRoute = "cellpose" | "cellacdc";
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? "ws://127.0.0.1:8765/ws";
+const DEFAULT_WS_BASE = "ws://127.0.0.1:8765";
+
+function detectRoute(): WebsocketRoute {
+  return window.location.pathname.toLowerCase().includes("/cellacdc")
+    ? "cellacdc"
+    : "cellpose";
+}
+
+function wsBaseFromEnv(): string {
+  const raw = import.meta.env.VITE_WS_URL?.trim();
+  if (!raw) return DEFAULT_WS_BASE;
+  const isWsUrl = raw.startsWith("ws://") || raw.startsWith("wss://");
+  if (!isWsUrl) return raw.replace(/\/+$/, "");
+  try {
+    const parsed = new URL(raw);
+    const hasWsPath =
+      parsed.pathname === "/ws" ||
+      parsed.pathname.endsWith("/ws") ||
+      parsed.pathname.endsWith("/ws/") ||
+      parsed.pathname.endsWith("/ws/cellpose") ||
+      parsed.pathname.endsWith("/ws/cellpose/") ||
+      parsed.pathname.endsWith("/ws/cellacdc") ||
+      parsed.pathname.endsWith("/ws/cellacdc/");
+    const basePath = hasWsPath ? parsed.pathname.replace(/\/ws(?:\/cellpose|\/cellacdc)?\/?$/, "") : parsed.pathname;
+    return `${parsed.origin}${basePath}`.replace(/\/+$/, "");
+  } catch {
+    return raw
+      .replace(/\/ws(?:\/cellpose|\/cellacdc)?\/?$/, "")
+      .replace(/\/+$/, "");
+  }
+}
 
 interface WsContextValue {
   status: ConnectionStatus;
+  route: WebsocketRoute;
   send: (msg: ClientMessage) => void;
 }
 
@@ -28,6 +60,8 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+  const route = useMemo(() => detectRoute(), []);
+  const baseWsUrl = useMemo(() => wsBaseFromEnv(), []);
 
   const {
     setRoots,
@@ -37,7 +71,15 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     setLoading: setFsLoading,
     setSuggestedTemplates,
   } = useFsStore();
-  const { setImage, setMask, setModels, setProgress, setRunDone, setSeriesDataset } = useSessionStore();
+  const {
+    setCellacdcAnnotations,
+    setImage,
+    setMask,
+    setModels,
+    setProgress,
+    setRunDone,
+    setSeriesDataset,
+  } = useSessionStore();
 
   const handleMessage = useCallback(
     (event: MessageEvent) => {
@@ -64,11 +106,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           break;
         case "fs:series_dataset_loaded": {
           const dataset = msg.payload;
-          const coords: Record<string, string> = {};
-          for (const [axis, values] of Object.entries(dataset.axes)) {
-            if (Array.isArray(values) && values.length > 0) {
-              coords[axis] = String(values[0]);
-            }
+          const coords: Record<string, number> = {};
+          for (const [axis, length] of Object.entries(dataset.axes)) {
+            if (length > 0) coords[axis] = 0;
           }
           setSeriesDataset(dataset, coords);
 
@@ -80,10 +120,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
                   folder: dataset.folder,
                   subfolder_template: dataset.subfolder_template,
                   filename_template: dataset.filename_template,
-                  position: coords.position || "0",
-                  time: coords.time || "0",
-                  channel: coords.channel || "0",
-                  z: coords.z || "0",
+                  position: coords.position ?? 0,
+                  time: coords.time ?? 0,
+                  channel: coords.channel ?? 0,
+                  z: coords.z ?? 0,
                 },
               }),
             );
@@ -100,6 +140,17 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           break;
         case "model:listed":
           setModels(msg.payload);
+          if (route === "cellacdc") {
+            const current = useSessionStore.getState().params.model;
+            const hasCurrent = msg.payload.some((model) => model.name === current);
+            if (!hasCurrent) {
+              const fallback =
+                msg.payload.find((model) => model.name === "Automatic thresholding" && model.available !== false) ??
+                msg.payload.find((model) => model.name === "cellpose_v4" && model.available !== false) ??
+                msg.payload.find((model) => model.available !== false);
+              if (fallback) useSessionStore.getState().setParams({ model: fallback.name });
+            }
+          }
           break;
         case "model:progress":
           setProgress(msg.payload);
@@ -110,6 +161,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
         case "model:train_done":
           setProgress(null);
           break;
+        case "cellacdc:annotations_updated":
+          setCellacdcAnnotations(msg.payload.annotations);
+          break;
         case "pong":
           break;
         case "error":
@@ -119,14 +173,30 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [setRoots, setDir, setHome, setImage, setMask, setModels, setProgress, setRunDone, setFsError, setFsLoading],
+    [
+      setRoots,
+      setDir,
+      setHome,
+      setSuggestedTemplates,
+      setSeriesDataset,
+      setImage,
+      setMask,
+      setModels,
+      setProgress,
+      setRunDone,
+      setCellacdcAnnotations,
+      setFsError,
+      setFsLoading,
+      route,
+    ],
   );
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
     setStatus("connecting");
-    const ws = new WebSocket(WS_URL);
+    const wsPath = route === "cellacdc" ? "/ws/cellacdc" : "/ws/cellpose";
+    const ws = new WebSocket(`${baseWsUrl}${wsPath}`);
 
     ws.onopen = () => {
       setStatus("connected");
@@ -145,7 +215,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     };
 
     wsRef.current = ws;
-  }, [handleMessage]);
+  }, [baseWsUrl, handleMessage, route]);
 
   useEffect(() => {
     connect();
@@ -163,7 +233,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const value = useMemo(() => ({ status, send }), [status, send]);
+  const value = useMemo(() => ({ status, route, send }), [status, route, send]);
   return <WsContext.Provider value={value}>{children}</WsContext.Provider>;
 }
 

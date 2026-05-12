@@ -18,7 +18,7 @@ import { useToolStore } from "@/stores/tool-store";
 import { SaveMenuItems } from "./save-menu";
 
 export function HeaderMenus() {
-  const { send } = useWebSocket();
+  const { send, route } = useWebSocket();
   const openBrowser = useFsStore((s) => s.openBrowser);
   const autoloadMasks = useFsStore((s) => s.autoloadMasks);
   const setAutoloadMasks = useFsStore((s) => s.setAutoloadMasks);
@@ -39,6 +39,7 @@ export function HeaderMenus() {
   const hasMasks = !!mask && mask.nRois > 0;
   const canUndo = !!mask?.canUndo;
   const canRedo = !!mask?.canRedo;
+  const isCellacdc = route === "cellacdc";
 
   const handleLoadFolderPattern = () => {
     openBrowser("dir", {
@@ -154,22 +155,26 @@ export function HeaderMenus() {
             render={<Button size="xs" variant="ghost">Models</Button>}
           />
           <MenuPopup align="start" sideOffset={4}>
-            <MenuItem disabled>Add custom torch model to GUI</MenuItem>
-            <MenuItem disabled>Remove selected custom model from GUI</MenuItem>
-            <MenuItem onClick={() => setTrainOpen(true)}>
-              Train new model with image+masks in folder <MenuShortcut>Ctrl+T</MenuShortcut>
-            </MenuItem>
-            <MenuItem
-              onClick={() =>
-                window.open(
-                  "https://cellpose.readthedocs.io/en/latest/train.html",
-                  "_blank",
-                )
-              }
-            >
-              Training instructions
-            </MenuItem>
-            <MenuSeparator />
+            {!isCellacdc && (
+              <>
+                <MenuItem disabled>Add custom torch model to GUI</MenuItem>
+                <MenuItem disabled>Remove selected custom model from GUI</MenuItem>
+                <MenuItem onClick={() => setTrainOpen(true)}>
+                  Train new model with image+masks in folder <MenuShortcut>Ctrl+T</MenuShortcut>
+                </MenuItem>
+                <MenuItem
+                  onClick={() =>
+                    window.open(
+                      "https://cellpose.readthedocs.io/en/latest/train.html",
+                      "_blank",
+                    )
+                  }
+                >
+                  Training instructions
+                </MenuItem>
+                <MenuSeparator />
+              </>
+            )}
             <MenuItem onClick={() => send({ type: "model:list" })}>
               Refresh model list
             </MenuItem>
@@ -192,16 +197,18 @@ export function HeaderMenus() {
             <MenuItem disabled>
               GUI layout <MenuShortcut>Ctrl+G</MenuShortcut>
             </MenuItem>
-            <MenuItem
-              onClick={() =>
-                window.open(
-                  "https://cellpose.readthedocs.io/en/latest/train.html",
-                  "_blank",
-                )
-              }
-            >
-              Training instructions
-            </MenuItem>
+            {!isCellacdc && (
+              <MenuItem
+                onClick={() =>
+                  window.open(
+                    "https://cellpose.readthedocs.io/en/latest/train.html",
+                    "_blank",
+                  )
+                }
+              >
+                Training instructions
+              </MenuItem>
+            )}
             <MenuSeparator />
             <MenuItem
               onClick={() => send({ type: "ping" })}

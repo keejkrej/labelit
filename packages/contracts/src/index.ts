@@ -36,11 +36,22 @@ export {
   // Models
   ModelInfoSchema,
   type ModelInfo,
+  CellposeRunModelPayload,
+  CellacdcRunModelPayload,
   RunModelPayload,
   TrainModelPayload,
   ProgressPayload,
   RunDonePayload,
   TrainDonePayload,
+  CellacdcTrackFramePayload,
+  CellacdcTrackSeriesPayload,
+  CellacdcAnnotationKindSchema,
+  type CellacdcAnnotationKind,
+  CellacdcAnnotationSetPayload,
+  CellacdcAnnotationClearPayload,
+  CellacdcObjectAnnotationSchema,
+  type CellacdcObjectAnnotation,
+  CellacdcAnnotationsUpdatedPayload,
 
   // Envelopes
   ClientMessageSchema,

@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { ImageMeta, MaskState, ModelInfo } from "@labelit/contracts";
+import type {
+  CellacdcObjectAnnotation,
+  ImageMeta,
+  MaskState,
+  ModelInfo,
+} from "@labelit/contracts";
 
 export interface SeriesDataset {
   folder: string;
@@ -48,6 +53,7 @@ interface SessionState {
 
   seriesDataset: SeriesDataset | null;
   seriesCoordinates: Record<string, number>;
+  cellacdcAnnotations: Record<string, CellacdcObjectAnnotation>;
 
   setImage: (image: ImageMeta | null) => void;
   setMask: (mask: MaskState | null) => void;
@@ -58,6 +64,7 @@ interface SessionState {
 
   setSeriesDataset: (dataset: SeriesDataset | null, coords?: Record<string, number>) => void;
   setSeriesCoordinates: (coords: Record<string, number>) => void;
+  setCellacdcAnnotations: (annotations: Record<string, CellacdcObjectAnnotation>) => void;
 }
 
 export const useSessionStore = create<SessionState>((set) => ({
@@ -70,8 +77,9 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   seriesDataset: null,
   seriesCoordinates: {},
+  cellacdcAnnotations: {},
 
-  setImage: (image) => set({ image, mask: null, segPath: null }),
+  setImage: (image) => set({ image, mask: null, segPath: null, cellacdcAnnotations: {} }),
   setMask: (mask) => set({ mask }),
   setModels: (models) => set({ models }),
   setProgress: (progress) => set({ progress }),
@@ -80,4 +88,5 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setSeriesDataset: (dataset, coords = {}) => set({ seriesDataset: dataset, seriesCoordinates: coords }),
   setSeriesCoordinates: (coords) => set({ seriesCoordinates: coords }),
+  setCellacdcAnnotations: (cellacdcAnnotations) => set({ cellacdcAnnotations }),
 }));

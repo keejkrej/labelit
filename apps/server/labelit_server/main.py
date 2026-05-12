@@ -8,6 +8,7 @@ process unless explicitly saved.
 from __future__ import annotations
 
 import traceback
+from typing import Literal
 
 import uvicorn
 from cellpose.gui import series
@@ -15,7 +16,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from labelit_contracts import SeriesDatasetPayload
 
-from . import fs, images, masks, models
+from . import cellacdc_models, fs, images, masks, models
 
 app = FastAPI(title="Labelit Server", version="0.3.0")
 
@@ -25,6 +26,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+WebsocketRoute = Literal["cellpose", "cellacdc"]
+
+
+def _normalize_run_payload(payload: dict) -> dict:
+    segmentation = payload.get("segmentation")
+    if isinstance(segmentation, dict):
+        base_payload = dict(payload)
+        base_payload.pop("segmentation", None)
+        base_payload.update(segmentation)
+        return base_payload
+    return payload
 
 
 @app.get("/health")
@@ -40,7 +53,16 @@ async def _send_mask_state(ws: WebSocket) -> None:
     await ws.send_json({"type": "mask:updated", "payload": masks.current_state()})
 
 
-async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
+async def _send_cellacdc_annotations(ws: WebSocket) -> None:
+    await ws.send_json(
+        {
+            "type": "cellacdc:annotations_updated",
+            "payload": cellacdc_models.current_annotations(),
+        }
+    )
+
+
+async def _dispatch(ws: WebSocket, msg_type: str, payload: dict, route: WebsocketRoute) -> None:
     if msg_type == "ping":
         await ws.send_json({"type": "pong"})
         return
@@ -90,6 +112,8 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
         masks.reset_history(result["path"])
         await ws.send_json({"type": "image:opened", "payload": result})
         await _send_mask_state(ws)
+        if route == "cellacdc":
+            await _send_cellacdc_annotations(ws)
         return
     if msg_type == "image:open_series":
         dataset = series.build_series_dataset(
@@ -115,6 +139,8 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
         masks.reset_history(result["path"])
         await ws.send_json({"type": "image:opened", "payload": result})
         await _send_mask_state(ws)
+        if route == "cellacdc":
+            await _send_cellacdc_annotations(ws)
         return
     if msg_type == "image:open_masks":
         masks_path = payload["path"]
@@ -122,6 +148,8 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
         images.open_masks(image_path, masks_path)
         masks.reset_history(image_path)
         await _send_mask_state(ws)
+        if route == "cellacdc":
+            await _send_cellacdc_annotations(ws)
         return
 
     # ----- saves -----
@@ -177,19 +205,25 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
 
     # ----- models -----
     if msg_type == "model:list":
-        await ws.send_json({"type": "model:listed", "payload": models.list_models()})
+        list_fn = cellacdc_models.list_models if route == "cellacdc" else models.list_models
+        await ws.send_json({"type": "model:listed", "payload": list_fn()})
         return
     if msg_type == "model:run":
+        run_payload = payload if route == "cellacdc" else _normalize_run_payload(payload)
+
         async def emit_progress(p: dict) -> None:
             await ws.send_json({"type": "model:progress", "payload": p})
 
-        result = await models.run_segmentation(payload, emit_progress)
+        run_fn = cellacdc_models.run_segmentation if route == "cellacdc" else models.run_segmentation
+        result = await run_fn(run_payload, emit_progress)
         # Segmentation replaced the mask; reset history and broadcast new state.
         masks.reset_history(result["imagePath"])
         await ws.send_json({"type": "model:run_done", "payload": result})
         await _send_mask_state(ws)
         return
     if msg_type == "model:train":
+        if route == "cellacdc":
+            raise ValueError("cellacdc route does not support model training")
         async def emit_train(p: dict) -> None:
             await ws.send_json({"type": "model:progress", "payload": p})
 
@@ -197,11 +231,46 @@ async def _dispatch(ws: WebSocket, msg_type: str, payload: dict) -> None:
         await ws.send_json({"type": "model:train_done", "payload": result})
         return
 
+    # ----- Cell-ACDC tracking + annotations -----
+    if msg_type == "cellacdc:track_frame":
+        if route != "cellacdc":
+            raise ValueError("cellacdc:track_frame is only available on /ws/cellacdc")
+        await ws.send_json(
+            {"type": "mask:updated", "payload": cellacdc_models.track_current_frame(payload)}
+        )
+        return
+    if msg_type == "cellacdc:track_series":
+        if route != "cellacdc":
+            raise ValueError("cellacdc:track_series is only available on /ws/cellacdc")
+        await ws.send_json(
+            {"type": "mask:updated", "payload": cellacdc_models.track_loaded_series(payload)}
+        )
+        return
+    if msg_type == "cellacdc:annotation:set":
+        if route != "cellacdc":
+            raise ValueError("cellacdc:annotation:set is only available on /ws/cellacdc")
+        await ws.send_json(
+            {
+                "type": "cellacdc:annotations_updated",
+                "payload": cellacdc_models.set_annotation(payload),
+            }
+        )
+        return
+    if msg_type == "cellacdc:annotation:clear":
+        if route != "cellacdc":
+            raise ValueError("cellacdc:annotation:clear is only available on /ws/cellacdc")
+        await ws.send_json(
+            {
+                "type": "cellacdc:annotations_updated",
+                "payload": cellacdc_models.clear_annotation(payload),
+            }
+        )
+        return
+
     raise ValueError(f"Unknown message type: {msg_type}")
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket) -> None:
+async def _websocket_endpoint(ws: WebSocket, route: WebsocketRoute) -> None:
     await ws.accept()
     try:
         while True:
@@ -209,12 +278,23 @@ async def websocket_endpoint(ws: WebSocket) -> None:
             msg_type = data.get("type")
             payload = data.get("payload") or {}
             try:
-                await _dispatch(ws, msg_type, payload)
+                await _dispatch(ws, msg_type, payload, route)
             except Exception as exc:
                 traceback.print_exc()
                 await _send_error(ws, f"{type(exc).__name__}: {exc}")
     except WebSocketDisconnect:
         return
+
+
+@app.websocket("/ws")
+@app.websocket("/ws/cellpose")
+async def websocket_cellpose_endpoint(ws: WebSocket) -> None:
+    await _websocket_endpoint(ws, "cellpose")
+
+
+@app.websocket("/ws/cellacdc")
+async def websocket_cellacdc_endpoint(ws: WebSocket) -> None:
+    await _websocket_endpoint(ws, "cellacdc")
 
 
 def run() -> None:
