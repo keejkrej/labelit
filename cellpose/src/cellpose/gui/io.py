@@ -90,8 +90,6 @@ def _remove_model(parent, ind=None, verbose=True):
         del parent.model_strings[ind]
         _write_model_list(parent.model_strings)
         model_path = _get_custom_model_dir().joinpath(modelstr)
-        if not model_path.exists():
-            model_path = MODEL_DIR.joinpath(modelstr)
         if model_path.exists():
             os.remove(os.fspath(model_path))
         if len(parent.model_strings) > 0:

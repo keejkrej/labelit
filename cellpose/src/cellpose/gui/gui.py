@@ -1980,13 +1980,6 @@ class MainW(QMainWindow):
             self.current_model_path = os.fspath(
                 models.MODEL_DIR.joinpath("custom", self.current_model)
             )
-            if not os.path.exists(self.current_model_path):
-                # Backward compatibility: accept older user-models stored directly in MODEL_DIR.
-                legacy_path = os.fspath(
-                    models.MODEL_DIR.joinpath(self.current_model)
-                )
-                if os.path.exists(legacy_path):
-                    self.current_model_path = legacy_path
         else:
             self.current_model = "cpsam"
             self.current_model_path = models.model_path(self.current_model)
@@ -1997,7 +1990,7 @@ class MainW(QMainWindow):
             if not os.path.exists(self.current_model_path):
                 raise ValueError("Model file not found: need to specify model (use dropdown)")
 
-        if model_name is None or not isinstance(model_name, str):
+        if custom or model_name is None or not isinstance(model_name, str):
             self.model = models.CellposeModel(gpu=self.useGPU.isChecked(),
                                               pretrained_model=self.current_model_path)
         else:
@@ -2085,7 +2078,8 @@ class MainW(QMainWindow):
             learning_rate=self.training_params["learning_rate"],
             weight_decay=self.training_params["weight_decay"],
             n_epochs=self.training_params["n_epochs"],
-            model_name=self.training_params["model_name"])[:2]
+            model_name=self.training_params["model_name"],
+            save_to_models_dir=False)[:2]
         # save train losses
         np.save(str(self.new_model_path) + "_train_losses.npy", train_losses)
         # run model on next image
