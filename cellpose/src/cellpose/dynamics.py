@@ -15,7 +15,6 @@ dynamics_logger = logging.getLogger(__name__)
 
 from . import utils
 
-import torch
 import torch.nn.functional as F
 
 def _extend_centers_gpu(neighbors, meds, isneighbor, shape, n_iter=200, 

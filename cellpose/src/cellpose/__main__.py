@@ -1,7 +1,8 @@
 """
 Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer , Michael Rariden and Marius Pachitariu.
 """
-import os, time
+import os
+import time
 import numpy as np
 from tqdm import tqdm
 from cellpose import utils, models, io, train
@@ -9,7 +10,7 @@ from .version import version_str
 from cellpose.cli import get_arg_parser
 
 try:
-    from cellpose.gui import gui3d, gui
+    from cellpose.gui import gui
     GUI_ENABLED = True
 except ImportError as err:
     GUI_ERROR = err
@@ -48,10 +49,7 @@ def main():
                     )
                     print("     pip install 'cellpose[gui]'")
             else:
-                if args.Zstack:
-                    gui3d.run()
-                else:
-                    gui.run()
+                gui.run()
             return
 
     ############################## run cellpose on images ##############################

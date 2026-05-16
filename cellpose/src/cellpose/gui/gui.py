@@ -2,29 +2,50 @@
 Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer, Michael Rariden and Marius Pachitariu.
 """
 
-import sys, os, pathlib, warnings, datetime, time, copy
+import copy
+import datetime
+import os
+import pathlib
+import sys
+import time
+import warnings
 
-from qtpy import QtGui, QtCore
-from superqt import QRangeSlider, QCollapsible
-from qtpy.QtWidgets import QMainWindow, QApplication, QWidget, \
-    QComboBox, QHBoxLayout, QGridLayout, QPushButton, QFrame, QCheckBox, QLabel, QProgressBar, QSlider, \
-        QLineEdit, QMessageBox, QGroupBox, QMenu, QAction
-import pyqtgraph as pg
-
-import numpy as np
-from scipy.stats import mode
 import cv2
+import numpy as np
+import pyqtgraph as pg
+from qtpy import QtCore, QtGui
+from qtpy.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QCompleter,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSlider,
+    QVBoxLayout,
+    QWidget,
+)
+from pyqtgraph.parametertree import Parameter, ParameterTree
+from superqt import QRangeSlider
 
-from . import guiparts, menus, io, series
-from .. import models, core, dynamics, version, train
-from ..utils import download_url_to_file, masks_to_outlines, diameters
-from ..io import get_image_files, imsave, imread
-from ..transforms import resize_image, normalize99, normalize99_tile, smooth_sharpen_img
+from .. import dynamics, models, train, version
+from ..io import get_image_files
 from ..models import normalize_default
 from ..plot import disk
+from ..transforms import normalize99, normalize99_tile, resize_image, smooth_sharpen_img
+from ..utils import download_url_to_file
+from . import guiparts, io, menus, series
 
 try:
     import matplotlib.pyplot as plt
+
     MATPLOTLIB = True
 except:
     MATPLOTLIB = False
@@ -33,7 +54,6 @@ Horizontal = QtCore.Qt.Orientation.Horizontal
 
 
 class Slider(QRangeSlider):
-
     def __init__(self, parent, name, color):
         super().__init__(Horizontal)
         self.setEnabled(False)
@@ -51,7 +71,6 @@ class Slider(QRangeSlider):
 
 
 class QHLine(QFrame):
-
     def __init__(self):
         super(QHLine, self).__init__()
         self.setFrameShape(QFrame.HLine)
@@ -59,7 +78,6 @@ class QHLine(QFrame):
 
 
 class SeriesAxisSlider(QSlider):
-
     keyboardRelease = QtCore.Signal()
 
     def keyReleaseEvent(self, event):
@@ -81,8 +99,9 @@ def make_bwr():
     # make a bwr colormap
     b = np.append(255 * np.ones(128), np.linspace(0, 255, 128)[::-1])[:, np.newaxis]
     r = np.append(np.linspace(0, 255, 128), 255 * np.ones(128))[:, np.newaxis]
-    g = np.append(np.linspace(0, 255, 128),
-                  np.linspace(0, 255, 128)[::-1])[:, np.newaxis]
+    g = np.append(np.linspace(0, 255, 128), np.linspace(0, 255, 128)[::-1])[
+        :, np.newaxis
+    ]
     color = np.concatenate((r, g, b), axis=-1).astype(np.uint8)
     bwr = pg.ColorMap(pos=np.linspace(0.0, 255, 256), color=color)
     return bwr
@@ -90,56 +109,786 @@ def make_bwr():
 
 def make_spectral():
     # make spectral colormap
-    r = np.array([
-        0, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80,
-        84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 128, 128, 128, 128, 128,
-        128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 120, 112, 104, 96, 88,
-        80, 72, 64, 56, 48, 40, 32, 24, 16, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 7, 11, 15, 19, 23,
-        27, 31, 35, 39, 43, 47, 51, 55, 59, 63, 67, 71, 75, 79, 83, 87, 91, 95, 99, 103,
-        107, 111, 115, 119, 123, 127, 131, 135, 139, 143, 147, 151, 155, 159, 163, 167,
-        171, 175, 179, 183, 187, 191, 195, 199, 203, 207, 211, 215, 219, 223, 227, 231,
-        235, 239, 243, 247, 251, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255
-    ])
-    g = np.array([
-        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 9, 9, 8, 8, 7, 7, 6, 6, 5, 5, 5, 4, 4, 3, 3,
-        2, 2, 1, 1, 0, 0, 0, 7, 15, 23, 31, 39, 47, 55, 63, 71, 79, 87, 95, 103, 111,
-        119, 127, 135, 143, 151, 159, 167, 175, 183, 191, 199, 207, 215, 223, 231, 239,
-        247, 255, 247, 239, 231, 223, 215, 207, 199, 191, 183, 175, 167, 159, 151, 143,
-        135, 128, 129, 131, 132, 134, 135, 137, 139, 140, 142, 143, 145, 147, 148, 150,
-        151, 153, 154, 156, 158, 159, 161, 162, 164, 166, 167, 169, 170, 172, 174, 175,
-        177, 178, 180, 181, 183, 185, 186, 188, 189, 191, 193, 194, 196, 197, 199, 201,
-        202, 204, 205, 207, 208, 210, 212, 213, 215, 216, 218, 220, 221, 223, 224, 226,
-        228, 229, 231, 232, 234, 235, 237, 239, 240, 242, 243, 245, 247, 248, 250, 251,
-        253, 255, 251, 247, 243, 239, 235, 231, 227, 223, 219, 215, 211, 207, 203, 199,
-        195, 191, 187, 183, 179, 175, 171, 167, 163, 159, 155, 151, 147, 143, 139, 135,
-        131, 127, 123, 119, 115, 111, 107, 103, 99, 95, 91, 87, 83, 79, 75, 71, 67, 63,
-        59, 55, 51, 47, 43, 39, 35, 31, 27, 23, 19, 15, 11, 7, 3, 0, 8, 16, 24, 32, 41,
-        49, 57, 65, 74, 82, 90, 98, 106, 115, 123, 131, 139, 148, 156, 164, 172, 180,
-        189, 197, 205, 213, 222, 230, 238, 246, 254
-    ])
-    b = np.array([
-        0, 7, 15, 23, 31, 39, 47, 55, 63, 71, 79, 87, 95, 103, 111, 119, 127, 135, 143,
-        151, 159, 167, 175, 183, 191, 199, 207, 215, 223, 231, 239, 247, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
-        255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 251, 247,
-        243, 239, 235, 231, 227, 223, 219, 215, 211, 207, 203, 199, 195, 191, 187, 183,
-        179, 175, 171, 167, 163, 159, 155, 151, 147, 143, 139, 135, 131, 128, 126, 124,
-        122, 120, 118, 116, 114, 112, 110, 108, 106, 104, 102, 100, 98, 96, 94, 92, 90,
-        88, 86, 84, 82, 80, 78, 76, 74, 72, 70, 68, 66, 64, 62, 60, 58, 56, 54, 52, 50,
-        48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 18, 16, 14, 12, 10,
-        8, 6, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 16, 24, 32, 41, 49, 57, 65, 74,
-        82, 90, 98, 106, 115, 123, 131, 139, 148, 156, 164, 172, 180, 189, 197, 205,
-        213, 222, 230, 238, 246, 254
-    ])
+    r = np.array(
+        [
+            0,
+            4,
+            8,
+            12,
+            16,
+            20,
+            24,
+            28,
+            32,
+            36,
+            40,
+            44,
+            48,
+            52,
+            56,
+            60,
+            64,
+            68,
+            72,
+            76,
+            80,
+            84,
+            88,
+            92,
+            96,
+            100,
+            104,
+            108,
+            112,
+            116,
+            120,
+            124,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            128,
+            120,
+            112,
+            104,
+            96,
+            88,
+            80,
+            72,
+            64,
+            56,
+            48,
+            40,
+            32,
+            24,
+            16,
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            3,
+            7,
+            11,
+            15,
+            19,
+            23,
+            27,
+            31,
+            35,
+            39,
+            43,
+            47,
+            51,
+            55,
+            59,
+            63,
+            67,
+            71,
+            75,
+            79,
+            83,
+            87,
+            91,
+            95,
+            99,
+            103,
+            107,
+            111,
+            115,
+            119,
+            123,
+            127,
+            131,
+            135,
+            139,
+            143,
+            147,
+            151,
+            155,
+            159,
+            163,
+            167,
+            171,
+            175,
+            179,
+            183,
+            187,
+            191,
+            195,
+            199,
+            203,
+            207,
+            211,
+            215,
+            219,
+            223,
+            227,
+            231,
+            235,
+            239,
+            243,
+            247,
+            251,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+        ]
+    )
+    g = np.array(
+        [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            9,
+            9,
+            8,
+            8,
+            7,
+            7,
+            6,
+            6,
+            5,
+            5,
+            5,
+            4,
+            4,
+            3,
+            3,
+            2,
+            2,
+            1,
+            1,
+            0,
+            0,
+            0,
+            7,
+            15,
+            23,
+            31,
+            39,
+            47,
+            55,
+            63,
+            71,
+            79,
+            87,
+            95,
+            103,
+            111,
+            119,
+            127,
+            135,
+            143,
+            151,
+            159,
+            167,
+            175,
+            183,
+            191,
+            199,
+            207,
+            215,
+            223,
+            231,
+            239,
+            247,
+            255,
+            247,
+            239,
+            231,
+            223,
+            215,
+            207,
+            199,
+            191,
+            183,
+            175,
+            167,
+            159,
+            151,
+            143,
+            135,
+            128,
+            129,
+            131,
+            132,
+            134,
+            135,
+            137,
+            139,
+            140,
+            142,
+            143,
+            145,
+            147,
+            148,
+            150,
+            151,
+            153,
+            154,
+            156,
+            158,
+            159,
+            161,
+            162,
+            164,
+            166,
+            167,
+            169,
+            170,
+            172,
+            174,
+            175,
+            177,
+            178,
+            180,
+            181,
+            183,
+            185,
+            186,
+            188,
+            189,
+            191,
+            193,
+            194,
+            196,
+            197,
+            199,
+            201,
+            202,
+            204,
+            205,
+            207,
+            208,
+            210,
+            212,
+            213,
+            215,
+            216,
+            218,
+            220,
+            221,
+            223,
+            224,
+            226,
+            228,
+            229,
+            231,
+            232,
+            234,
+            235,
+            237,
+            239,
+            240,
+            242,
+            243,
+            245,
+            247,
+            248,
+            250,
+            251,
+            253,
+            255,
+            251,
+            247,
+            243,
+            239,
+            235,
+            231,
+            227,
+            223,
+            219,
+            215,
+            211,
+            207,
+            203,
+            199,
+            195,
+            191,
+            187,
+            183,
+            179,
+            175,
+            171,
+            167,
+            163,
+            159,
+            155,
+            151,
+            147,
+            143,
+            139,
+            135,
+            131,
+            127,
+            123,
+            119,
+            115,
+            111,
+            107,
+            103,
+            99,
+            95,
+            91,
+            87,
+            83,
+            79,
+            75,
+            71,
+            67,
+            63,
+            59,
+            55,
+            51,
+            47,
+            43,
+            39,
+            35,
+            31,
+            27,
+            23,
+            19,
+            15,
+            11,
+            7,
+            3,
+            0,
+            8,
+            16,
+            24,
+            32,
+            41,
+            49,
+            57,
+            65,
+            74,
+            82,
+            90,
+            98,
+            106,
+            115,
+            123,
+            131,
+            139,
+            148,
+            156,
+            164,
+            172,
+            180,
+            189,
+            197,
+            205,
+            213,
+            222,
+            230,
+            238,
+            246,
+            254,
+        ]
+    )
+    b = np.array(
+        [
+            0,
+            7,
+            15,
+            23,
+            31,
+            39,
+            47,
+            55,
+            63,
+            71,
+            79,
+            87,
+            95,
+            103,
+            111,
+            119,
+            127,
+            135,
+            143,
+            151,
+            159,
+            167,
+            175,
+            183,
+            191,
+            199,
+            207,
+            215,
+            223,
+            231,
+            239,
+            247,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            255,
+            251,
+            247,
+            243,
+            239,
+            235,
+            231,
+            227,
+            223,
+            219,
+            215,
+            211,
+            207,
+            203,
+            199,
+            195,
+            191,
+            187,
+            183,
+            179,
+            175,
+            171,
+            167,
+            163,
+            159,
+            155,
+            151,
+            147,
+            143,
+            139,
+            135,
+            131,
+            128,
+            126,
+            124,
+            122,
+            120,
+            118,
+            116,
+            114,
+            112,
+            110,
+            108,
+            106,
+            104,
+            102,
+            100,
+            98,
+            96,
+            94,
+            92,
+            90,
+            88,
+            86,
+            84,
+            82,
+            80,
+            78,
+            76,
+            74,
+            72,
+            70,
+            68,
+            66,
+            64,
+            62,
+            60,
+            58,
+            56,
+            54,
+            52,
+            50,
+            48,
+            46,
+            44,
+            42,
+            40,
+            38,
+            36,
+            34,
+            32,
+            30,
+            28,
+            26,
+            24,
+            22,
+            20,
+            18,
+            16,
+            14,
+            12,
+            10,
+            8,
+            6,
+            4,
+            2,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            8,
+            16,
+            24,
+            32,
+            41,
+            49,
+            57,
+            65,
+            74,
+            82,
+            90,
+            98,
+            106,
+            115,
+            123,
+            131,
+            139,
+            148,
+            156,
+            164,
+            172,
+            180,
+            189,
+            197,
+            205,
+            213,
+            222,
+            230,
+            238,
+            246,
+            254,
+        ]
+    )
     color = (np.vstack((r, g, b)).T).astype(np.uint8)
     spectral = pg.ColorMap(pos=np.linspace(0.0, 255, 256), color=color)
     return spectral
@@ -157,6 +906,7 @@ def make_cmap(cm=0):
 
 def run(image=None):
     from ..io import logger_setup
+
     logger, log_file = logger_setup()
     # Always start by initializing Qt (only once per application)
     warnings.filterwarnings("ignore")
@@ -169,11 +919,16 @@ def run(image=None):
         print("downloading logo")
         download_url_to_file(
             "https://www.cellpose.org/static/images/cellpose_transparent.png",
-            icon_path, progress=True)
+            icon_path,
+            progress=True,
+        )
     if not guip_path.is_file():
         print("downloading help window image")
-        download_url_to_file("https://www.cellpose.org/static/images/cellposeSAM_gui.png",
-                             guip_path, progress=True)
+        download_url_to_file(
+            "https://www.cellpose.org/static/images/cellposeSAM_gui.png",
+            guip_path,
+            progress=True,
+        )
     icon_path = str(icon_path.resolve())
     app_icon = QtGui.QIcon()
     app_icon.addFile(icon_path, QtCore.QSize(16, 16))
@@ -191,7 +946,6 @@ def run(image=None):
 
 
 class MainW(QMainWindow):
-
     def __init__(self, image=None, logger=None):
         super(MainW, self).__init__()
 
@@ -218,24 +972,6 @@ class MainW(QMainWindow):
         menus.modelmenu(self)
         menus.helpmenu(self)
 
-        self.stylePressed = """QPushButton {Text-align: center; 
-                             background-color: rgb(150,50,150); 
-                             border-color: white;
-                             color:white;}
-                            QToolTip { 
-                           background-color: black; 
-                           color: white; 
-                           border: black solid 1px
-                           }"""
-        self.styleUnpressed = """QPushButton {Text-align: center; 
-                               background-color: rgb(50,50,50);
-                                border-color: white;
-                               color:white;}
-                                QToolTip { 
-                           background-color: black; 
-                           color: white; 
-                           border: black solid 1px
-                           }"""
         self.loaded = False
 
         # ---- MAIN WIDGET LAYOUT ---- #
@@ -267,25 +1003,29 @@ class MainW(QMainWindow):
         self.bwr = bwrmap.getLookupTable(start=0.0, stop=255.0, alpha=False)
         self.cmap = []
         # spectral colormap
-        self.cmap.append(make_spectral().getLookupTable(start=0.0, stop=255.0,
-                                                        alpha=False))
+        self.cmap.append(
+            make_spectral().getLookupTable(start=0.0, stop=255.0, alpha=False)
+        )
         # single channel colormaps
         for i in range(3):
             self.cmap.append(
-                make_cmap(i).getLookupTable(start=0.0, stop=255.0, alpha=False))
+                make_cmap(i).getLookupTable(start=0.0, stop=255.0, alpha=False)
+            )
 
         if MATPLOTLIB:
-            self.colormap = (plt.get_cmap("gist_ncar")(np.linspace(0.0, .9, 1000000)) *
-                             255).astype(np.uint8)
+            self.colormap = (
+                plt.get_cmap("gist_ncar")(np.linspace(0.0, 0.9, 1000000)) * 255
+            ).astype(np.uint8)
             np.random.seed(42)  # make colors stable
             self.colormap = self.colormap[np.random.permutation(1000000)]
         else:
             np.random.seed(42)  # make colors stable
             self.colormap = ((np.random.rand(1000000, 3) * 0.8 + 0.1) * 255).astype(
-                np.uint8)
+                np.uint8
+            )
         self.NZ = 1
         self.restore = None
-        self.ratio = 1.
+        self.ratio = 1.0
         self.series_dataset = None
         self.series_index = None
         self.output_filename = None
@@ -316,9 +1056,9 @@ class MainW(QMainWindow):
             "model_save_folder": os.fspath(models.MODEL_DIR.joinpath("custom")),
         }
 
-        self.stitch_threshold = 0.
-        self.flow3D_smooth = 0.
-        self.anisotropy = 1.
+        self.stitch_threshold = 0.0
+        self.flow3D_smooth = 0.0
+        self.anisotropy = 1.0
         self.min_size = 15
 
         self.setAcceptDrops(True)
@@ -338,14 +1078,8 @@ class MainW(QMainWindow):
         EG.show()
 
     def make_buttons(self):
-        self.boldfont = QtGui.QFont("Arial", 11, QtGui.QFont.Bold)
-        self.boldmedfont = QtGui.QFont("Arial", 9, QtGui.QFont.Bold)
-        self.medfont = QtGui.QFont("Arial", 9)
-        self.smallfont = QtGui.QFont("Arial", 8)
-
         b = 0
         self.navBox = QGroupBox("Navigation")
-        self.navBox.setFont(self.boldfont)
         self.navBoxG = QGridLayout()
         self.navBox.setLayout(self.navBoxG)
         self.left_sidebar.addWidget(self.navBox, b, 0, 1, 9)
@@ -359,16 +1093,13 @@ class MainW(QMainWindow):
         for column, axis_name in enumerate(series.SERIES_AXES):
             row = column
             label = QLabel(axis_labels[axis_name])
-            label.setFont(self.medfont)
             self.navBoxG.addWidget(label, row, 0, 1, 1)
 
             prev_btn = QPushButton("<")
-            prev_btn.setFixedWidth(28)
             prev_btn.setEnabled(False)
             prev_btn.clicked.connect(
-                lambda _checked=False, axis_name=axis_name: self.navigate_series_from_sliders(
-                    axis_name, -1
-                )
+                lambda _checked=False,
+                axis_name=axis_name: self.navigate_series_from_sliders(axis_name, -1)
             )
             self.navBoxG.addWidget(prev_btn, row, 1, 1, 1)
 
@@ -385,25 +1116,22 @@ class MainW(QMainWindow):
             self.navBoxG.addWidget(slider, row, 2, 1, 1)
 
             next_btn = QPushButton(">")
-            next_btn.setFixedWidth(28)
             next_btn.setEnabled(False)
             next_btn.clicked.connect(
-                lambda _checked=False, axis_name=axis_name: self.navigate_series_from_sliders(
-                    axis_name, +1
-                )
+                lambda _checked=False,
+                axis_name=axis_name: self.navigate_series_from_sliders(axis_name, +1)
             )
             self.navBoxG.addWidget(next_btn, row, 3, 1, 1)
 
             self.series_nav_controls[axis_name] = {
                 "slider": slider,
                 "prev_btn": prev_btn,
-                "next_btn": next_btn
+                "next_btn": next_btn,
             }
         self.navBox.setEnabled(False)
 
         b += 1
         self.satBox = QGroupBox("Views")
-        self.satBox.setFont(self.boldfont)
         self.satBoxG = QGridLayout()
         self.satBox.setLayout(self.satBoxG)
         self.left_sidebar.addWidget(self.satBox, b, 0, 1, 9)
@@ -413,40 +1141,31 @@ class MainW(QMainWindow):
         self.color = 0  # 0=RGB, 1=gray, 2=R, 3=G, 4=B
         self.RGBDropDown = QComboBox()
         self.RGBDropDown.addItems(
-            ["RGB", "red=R", "green=G", "blue=B", "gray", "spectral"])
-        self.RGBDropDown.setFont(self.medfont)
+            ["RGB", "red=R", "green=G", "blue=B", "gray", "spectral"]
+        )
         self.RGBDropDown.currentIndexChanged.connect(self.color_choose)
         self.satBoxG.addWidget(self.RGBDropDown, widget_row, 0, 1, 3)
 
         label = QLabel("<p>[&uarr; / &darr; or W/S]</p>")
-        label.setFont(self.smallfont)
         self.satBoxG.addWidget(label, widget_row, 3, 1, 3)
         label = QLabel("[R / G / B \n toggles color ]")
-        label.setFont(self.smallfont)
         self.satBoxG.addWidget(label, widget_row, 6, 1, 3)
 
         widget_row += 1
         self.ViewDropDown = QComboBox()
         self.ViewDropDown.addItems(["image", "gradXY", "cellprob", "restored"])
-        self.ViewDropDown.setFont(self.medfont)
         self.ViewDropDown.model().item(3).setEnabled(False)
         self.ViewDropDown.currentIndexChanged.connect(self.update_plot)
         self.satBoxG.addWidget(self.ViewDropDown, widget_row, 0, 2, 3)
 
         label = QLabel("[pageup / pagedown]")
-        label.setFont(self.smallfont)
         self.satBoxG.addWidget(label, widget_row, 3, 1, 5)
 
         widget_row += 2
         label = QLabel("")
-        label.setToolTip(
-            "NOTE: manually changing the saturation bars does not affect normalization in segmentation"
-        )
         self.satBoxG.addWidget(label, widget_row, 0, 1, 5)
 
         self.autobtn = QCheckBox("auto-adjust saturation")
-        self.autobtn.setToolTip("sets scale-bars as normalized for segmentation")
-        self.autobtn.setFont(self.medfont)
         self.autobtn.setChecked(True)
         self.satBoxG.addWidget(self.autobtn, widget_row, 1, 1, 8)
 
@@ -462,23 +1181,18 @@ class MainW(QMainWindow):
             else:
                 label = QLabel(names[r] + ":")
             label.setStyleSheet(f"color: {colornames[r]}")
-            label.setFont(self.boldmedfont)
             self.satBoxG.addWidget(label, widget_row, 0, 1, 2)
             self.sliders.append(Slider(self, names[r], colors[r]))
-            self.sliders[-1].setMinimum(-.1)
+            self.sliders[-1].setMinimum(-0.1)
             self.sliders[-1].setMaximum(255.1)
             self.sliders[-1].setValue([0, 255])
-            self.sliders[-1].setToolTip(
-                "NOTE: manually changing the saturation bars does not affect normalization in segmentation"
-            )
             self.satBoxG.addWidget(self.sliders[-1], widget_row, 2, 1, 7)
 
         b += 1
         self.drawBox = QGroupBox("Drawing")
-        self.drawBox.setFont(self.boldfont)
         self.drawBoxG = QGridLayout()
         self.drawBox.setLayout(self.drawBoxG)
-        self.left_sidebar.addWidget(self.drawBox, b, 0, 1, 9)
+        self.right_sidebar.addWidget(self.drawBox, 1, 0, 1, 1)
         self.autosave = True
 
         widget_row = 0
@@ -486,11 +1200,8 @@ class MainW(QMainWindow):
         self.BrushChoose = QComboBox()
         self.BrushChoose.addItems(["1", "3", "5", "7", "9"])
         self.BrushChoose.currentIndexChanged.connect(self.brush_choose)
-        self.BrushChoose.setFixedWidth(40)
-        self.BrushChoose.setFont(self.medfont)
         self.drawBoxG.addWidget(self.BrushChoose, widget_row, 3, 1, 2)
         label = QLabel("brush size:")
-        label.setFont(self.medfont)
         self.drawBoxG.addWidget(label, widget_row, 0, 1, 3)
 
         widget_row += 1
@@ -498,7 +1209,6 @@ class MainW(QMainWindow):
         self.layer_off = False
         self.masksOn = True
         self.MCheckBox = QCheckBox("MASKS ON [X]")
-        self.MCheckBox.setFont(self.medfont)
         self.MCheckBox.setChecked(True)
         self.MCheckBox.toggled.connect(self.toggle_masks)
         self.drawBoxG.addWidget(self.MCheckBox, widget_row, 0, 1, 5)
@@ -507,14 +1217,12 @@ class MainW(QMainWindow):
         # turn off outlines
         self.outlinesOn = False  # turn off by default
         self.OCheckBox = QCheckBox("outlines on [Z]")
-        self.OCheckBox.setFont(self.medfont)
         self.drawBoxG.addWidget(self.OCheckBox, widget_row, 0, 1, 5)
         self.OCheckBox.setChecked(False)
         self.OCheckBox.toggled.connect(self.toggle_masks)
 
         widget_row += 1
         self.SCheckBox = QCheckBox("single stroke")
-        self.SCheckBox.setFont(self.medfont)
         self.SCheckBox.setChecked(True)
         self.SCheckBox.toggled.connect(self.autosave_on)
         self.SCheckBox.setEnabled(True)
@@ -523,212 +1231,273 @@ class MainW(QMainWindow):
         # buttons for deleting multiple cells
         self.deleteBox = QGroupBox("delete multiple ROIs")
         self.deleteBox.setStyleSheet("color: rgb(200, 200, 200)")
-        self.deleteBox.setFont(self.medfont)
         self.deleteBoxG = QGridLayout()
         self.deleteBox.setLayout(self.deleteBoxG)
         self.drawBoxG.addWidget(self.deleteBox, 0, 5, 4, 4)
         self.MakeDeletionRegionButton = QPushButton("region-select")
         self.MakeDeletionRegionButton.clicked.connect(self.remove_region_cells)
         self.deleteBoxG.addWidget(self.MakeDeletionRegionButton, 0, 0, 1, 4)
-        self.MakeDeletionRegionButton.setFont(self.smallfont)
-        self.MakeDeletionRegionButton.setFixedWidth(70)
         self.DeleteMultipleROIButton = QPushButton("click-select")
         self.DeleteMultipleROIButton.clicked.connect(self.delete_multiple_cells)
         self.deleteBoxG.addWidget(self.DeleteMultipleROIButton, 1, 0, 1, 4)
-        self.DeleteMultipleROIButton.setFont(self.smallfont)
-        self.DeleteMultipleROIButton.setFixedWidth(70)
         self.DoneDeleteMultipleROIButton = QPushButton("done")
         self.DoneDeleteMultipleROIButton.clicked.connect(
-            self.done_remove_multiple_cells)
+            self.done_remove_multiple_cells
+        )
         self.deleteBoxG.addWidget(self.DoneDeleteMultipleROIButton, 2, 0, 1, 2)
-        self.DoneDeleteMultipleROIButton.setFont(self.smallfont)
-        self.DoneDeleteMultipleROIButton.setFixedWidth(35)
         self.CancelDeleteMultipleROIButton = QPushButton("cancel")
         self.CancelDeleteMultipleROIButton.clicked.connect(self.cancel_remove_multiple)
         self.deleteBoxG.addWidget(self.CancelDeleteMultipleROIButton, 2, 2, 1, 2)
-        self.CancelDeleteMultipleROIButton.setFont(self.smallfont)
-        self.CancelDeleteMultipleROIButton.setFixedWidth(35)
 
         b += 1
-        widget_row = 0
         self.segBox = QGroupBox("Segmentation")
-        self.segBoxG = QGridLayout()
-        self.segBox.setLayout(self.segBoxG)
+        self.segBoxV = QVBoxLayout()
+        self.segBox.setLayout(self.segBoxV)
         self.right_sidebar.addWidget(self.segBox, 0, 0, 1, 1)
-        self.segBox.setFont(self.boldfont)
 
-        widget_row += 1
-
-        # use GPU
-        self.useGPU = QCheckBox("use GPU")
-        self.useGPU.setToolTip(
-            "if you have specially installed the <i>cuda</i> version of torch, then you can activate this"
-        )
-        self.useGPU.setFont(self.medfont)
-        self.check_gpu()
-        self.segBoxG.addWidget(self.useGPU, widget_row, 0, 1, 3)
-
-        # compute segmentation with general models
-        self.net_text = ["run CPSAM"]
-        nett = ["cellpose super-generalist model"]
+        seg_controls = QHBoxLayout()
+        self.segBoxV.addLayout(seg_controls)
 
         self.StyleButtons = []
-        jj = 4
-        for j in range(len(self.net_text)):
-            self.StyleButtons.append(
-                guiparts.ModelButton(self, self.net_text[j], self.net_text[j]))
-            w = 5
-            self.segBoxG.addWidget(self.StyleButtons[-1], widget_row, jj, 1, w)
-            jj += w
-            self.StyleButtons[-1].setToolTip(nett[j])
+        model_label = QLabel("model:")
+        seg_controls.addWidget(model_label)
 
-        widget_row += 1
-        self.ncells = guiparts.ObservableVariable(0)
-        self.roi_count = QLabel()
-        self.roi_count.setFont(self.boldfont)
-        self.roi_count.setAlignment(QtCore.Qt.AlignLeft)
-        self.ncells.valueChanged.connect(
-            lambda n: self.roi_count.setText(f'{str(n)} ROIs')
-        )
-
-        self.segBoxG.addWidget(self.roi_count, widget_row, 0, 1, 4)
-
-        self.progress = QProgressBar(self)
-        self.segBoxG.addWidget(self.progress, widget_row, 4, 1, 5)
-
-        widget_row += 1
-
-        ############################### Segmentation settings ###############################
-        self.additional_seg_settings_qcollapsible = QCollapsible("additional settings")
-        self.additional_seg_settings_qcollapsible.setFont(self.medfont)
-        self.additional_seg_settings_qcollapsible._toggle_btn.setFont(self.medfont)
-        self.segmentation_settings = guiparts.SegmentationSettings(self.medfont)
-        self.additional_seg_settings_qcollapsible.setContent(self.segmentation_settings)
-        self.segBoxG.addWidget(self.additional_seg_settings_qcollapsible, widget_row, 0, 1, 9)
-
-        # connect edits to image processing steps: 
-        self.segmentation_settings.diameter_box.editingFinished.connect(self.update_scale)
-        self.segmentation_settings.flow_threshold_box.returnPressed.connect(self.compute_cprob)
-        self.segmentation_settings.cellprob_threshold_box.returnPressed.connect(self.compute_cprob)
-        self.segmentation_settings.niter_box.returnPressed.connect(self.compute_cprob)
-
-        # Needed to do this for the drop down to not be open on startup
-        self.additional_seg_settings_qcollapsible._toggle_btn.setChecked(True)
-        self.additional_seg_settings_qcollapsible._toggle_btn.setChecked(False)
-
-        # user-trained models in the right sidebar
-        self.modelBox = QGroupBox("user-trained models")
-        self.modelBoxG = QGridLayout()
-        self.modelBox.setLayout(self.modelBoxG)
-        self.right_sidebar.addWidget(self.modelBox, 1, 0, 1, 1)
-        self.modelBox.setFont(self.boldfont)
-        # choose models
         self.ModelChooseC = QComboBox()
-        self.ModelChooseC.setFont(self.medfont)
-        current_index = 0
-        self.ModelChooseC.addItems(["custom models"])
+        self.ModelChooseC.addItems(["CPSAM"])
         if len(self.model_strings) > 0:
             self.ModelChooseC.addItems(self.model_strings)
-        self.ModelChooseC.setFixedWidth(175)
-        self.ModelChooseC.setCurrentIndex(current_index)
-        tipstr = 'add or train your own models in the "Models" file menu and choose model here'
-        self.ModelChooseC.setToolTip(tipstr)
+        self.ModelChooseC.setCurrentIndex(0)
+        self.ModelChooseC.setEditable(True)
+        self.ModelChooseC.setInsertPolicy(QComboBox.NoInsert)
+        self.ModelChooseC.setCurrentText("CPSAM")
+        self.ModelChooseC.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self.ModelChooseC.completer().setCaseSensitivity(QtCore.Qt.CaseInsensitive)
         self.ModelChooseC.activated.connect(lambda: self.model_choose(custom=True))
-        self.modelBoxG.addWidget(self.ModelChooseC, widget_row, 0, 1, 8)
+        seg_controls.addWidget(self.ModelChooseC)
 
-        # compute segmentation w/ custom model
-        self.ModelButtonC = QPushButton(u"run")
-        self.ModelButtonC.setFont(self.medfont)
-        self.ModelButtonC.setFixedWidth(35)
-        self.ModelButtonC.clicked.connect(
-            lambda: self.compute_segmentation(custom=True))
-        self.modelBoxG.addWidget(self.ModelButtonC, widget_row, 8, 1, 1)
+        self.ModelButtonC = QPushButton("run")
+        self.ModelButtonC.clicked.connect(self.run_selected_model)
         self.ModelButtonC.setEnabled(False)
 
+        self.ncells = guiparts.ObservableVariable(0)
+        self.progress = QProgressBar(self)
 
-        self.filterBox = QGroupBox("Image filtering")
-        self.filterBox.setFont(self.boldfont)
-        self.filterBox_grid_layout = QGridLayout()
-        self.filterBox.setLayout(self.filterBox_grid_layout)
-        self.right_sidebar.addWidget(self.filterBox, 2, 0, 1, 1)
+        self.seg_param_root = Parameter.create(
+            name="segmentation",
+            type="group",
+            children=[
+                {"name": "diameter", "type": "float", "value": 0.0, "step": 1.0},
+                {
+                    "name": "flow_threshold",
+                    "title": "flow threshold",
+                    "type": "float",
+                    "value": 0.4,
+                    "step": 0.1,
+                },
+                {
+                    "name": "cellprob_threshold",
+                    "title": "cellprob threshold",
+                    "type": "float",
+                    "value": 0.0,
+                    "step": 0.1,
+                },
+                {
+                    "name": "norm_percentile_low",
+                    "title": "norm percentile lower",
+                    "type": "float",
+                    "value": 1.0,
+                    "limits": (0.0, 100.0),
+                    "step": 1.0,
+                },
+                {
+                    "name": "norm_percentile_high",
+                    "title": "norm percentile upper",
+                    "type": "float",
+                    "value": 99.0,
+                    "limits": (0.0, 100.0),
+                    "step": 1.0,
+                },
+                {
+                    "name": "niter",
+                    "title": "niter dynamics",
+                    "type": "int",
+                    "value": 0,
+                    "step": 1,
+                },
+            ],
+        )
+        self.seg_params_tree = ParameterTree(showHeader=False)
+        self.seg_params_tree.setParameters(self.seg_param_root, showTop=False)
+        self.segBoxV.addWidget(self.seg_params_tree)
 
-        widget_row = 0
-        
-        # Filtering
-        self.FilterButtons = []
-        nett = [
-            "clear restore/filter",
-            "filter image (settings below)",
-        ]
-        self.filter_text = ["none", 
-                             "filter", 
-                             ]
+        seg_progress = QHBoxLayout()
+        self.segBoxV.addLayout(seg_progress)
+        seg_progress.addWidget(self.ModelButtonC)
+        seg_progress.addWidget(self.progress, 1)
+
+        self.seg_param_root.param("diameter").sigValueChanged.connect(
+            lambda *_: self.update_scale()
+        )
+        self.seg_param_root.param("flow_threshold").sigValueChanged.connect(
+            lambda *_: self.compute_cprob()
+        )
+        self.seg_param_root.param("cellprob_threshold").sigValueChanged.connect(
+            lambda *_: self.compute_cprob()
+        )
+        self.seg_param_root.param("niter").sigValueChanged.connect(
+            lambda *_: self.compute_cprob()
+        )
+        self.seg_param_root.param("norm_percentile_low").sigValueChanged.connect(
+            lambda *_: self.validate_normalization_range()
+        )
+        self.seg_param_root.param("norm_percentile_high").sigValueChanged.connect(
+            lambda *_: self.validate_normalization_range()
+        )
+
+        self.filterBox = QGroupBox("Preprocessing")
+        self.filterBoxV = QVBoxLayout()
+        self.filterBox.setLayout(self.filterBoxV)
+        self.left_sidebar.addWidget(self.filterBox, b, 0, 1, 9)
+
         self.restore = None
-        self.ratio = 1.
-        jj = 0
-        w = 3
-        for j in range(len(self.filter_text)):
-            self.FilterButtons.append(
-                guiparts.FilterButton(self, self.filter_text[j]))
-            self.filterBox_grid_layout.addWidget(self.FilterButtons[-1], widget_row, jj, 1, w)
-            self.FilterButtons[-1].setFixedWidth(75)
-            self.FilterButtons[-1].setToolTip(nett[j])
-            self.FilterButtons[-1].setFont(self.medfont)
-            widget_row += 1 if j%2==1 else 0
-            jj = 0 if j%2==1 else jj + w
+        self.ratio = 1.0
+        filter_buttons_layout = QHBoxLayout()
+        self.reset_filter_button = QPushButton("reset")
+        self.reset_filter_button.setEnabled(False)
+        self.reset_filter_button.clicked.connect(self.clear_restore)
+        filter_buttons_layout.addWidget(self.reset_filter_button)
+        self.apply_filter_button = QPushButton("apply")
+        self.apply_filter_button.setEnabled(False)
+        self.apply_filter_button.clicked.connect(self.apply_filter)
+        filter_buttons_layout.addWidget(self.apply_filter_button)
 
         self.save_norm = QCheckBox("save restored/filtered image")
-        self.save_norm.setFont(self.medfont)
-        self.save_norm.setToolTip("save restored/filtered image in _seg.npy file")
         self.save_norm.setChecked(True)
 
-        widget_row += 2
-
-        self.filtBox = QCollapsible("custom filter settings")
-        self.filtBox._toggle_btn.setFont(self.medfont)
-        self.filtBoxG = QGridLayout()
-        _content = QWidget()
-        _content.setLayout(self.filtBoxG)
-        _content.setMaximumHeight(0)
-        _content.setMinimumHeight(0)
-        self.filtBox.setContent(_content)
-        self.filterBox_grid_layout.addWidget(self.filtBox, widget_row, 0, 1, 9)
-
-        self.filt_vals = [0., 0., 0., 0.]
-        self.filt_edits = []
-        labels = [
-            "sharpen\nradius", "smooth\nradius", "tile_norm\nblocksize",
-            "tile_norm\nsmooth3D"
-        ]
-        tooltips = [
-            "set size of surround-subtraction filter for sharpening image",
-            "set size of gaussian filter for smoothing image",
-            "set size of tiles to use to normalize image",
-            "set amount of smoothing of normalization values across planes"
-        ]
-
-        for p in range(4):
-            label = QLabel(f"{labels[p]}:")
-            label.setToolTip(tooltips[p])
-            label.setFont(self.medfont)
-            self.filtBoxG.addWidget(label, widget_row + p // 2, 4 * (p % 2), 1, 2)
-            self.filt_edits.append(QLineEdit())
-            self.filt_edits[p].setText(str(self.filt_vals[p]))
-            self.filt_edits[p].setFixedWidth(40)
-            self.filt_edits[p].setFont(self.medfont)
-            self.filtBoxG.addWidget(self.filt_edits[p], widget_row + p // 2, 4 * (p % 2) + 2, 1,
-                                    2)
-            self.filt_edits[p].setToolTip(tooltips[p])
-
-        widget_row += 3
-        self.norm3D_cb = QCheckBox("norm3D")
-        self.norm3D_cb.setFont(self.medfont)
-        self.norm3D_cb.setChecked(True)
-        self.norm3D_cb.setToolTip("run same normalization across planes")
-        self.filtBoxG.addWidget(self.norm3D_cb, widget_row, 0, 1, 3)
-
+        self.preprocessing_param_root = Parameter.create(
+            name="preprocessing",
+            type="group",
+            children=[
+                {
+                    "name": "sharpen_radius",
+                    "title": "sharpen radius",
+                    "type": "float",
+                    "value": 0.0,
+                    "step": 1.0,
+                },
+                {
+                    "name": "smooth_radius",
+                    "title": "smooth radius",
+                    "type": "float",
+                    "value": 0.0,
+                    "step": 1.0,
+                },
+                {
+                    "name": "tile_norm_blocksize",
+                    "title": "tile norm blocksize",
+                    "type": "float",
+                    "value": 0.0,
+                    "step": 1.0,
+                },
+                {
+                    "name": "tile_norm_smooth3D",
+                    "title": "tile norm smooth3D",
+                    "type": "float",
+                    "value": 0.0,
+                    "step": 1.0,
+                },
+                {"name": "norm3D", "type": "bool", "value": True},
+            ],
+        )
+        self.preprocessing_params_tree = ParameterTree(showHeader=False)
+        self.preprocessing_params_tree.setParameters(
+            self.preprocessing_param_root, showTop=False
+        )
+        self.filterBoxV.addWidget(self.preprocessing_params_tree)
+        self.filterBoxV.addLayout(filter_buttons_layout)
 
         return b
+
+    def validate_normalization_range(self):
+        try:
+            self.get_segmentation_parameters()
+        except ValueError:
+            print("GUI_ERROR: normalization percentile lower must be less than upper")
+            return
+
+    def get_segmentation_parameters(self):
+        diameter = float(self.seg_param_root.param("diameter").value())
+        diameter = diameter if diameter > 0 else None
+        low = float(self.seg_param_root.param("norm_percentile_low").value())
+        high = float(self.seg_param_root.param("norm_percentile_high").value())
+        if not 0 <= low <= 100 or not 0 <= high <= 100 or low >= high:
+            raise ValueError(
+                "normalization percentile range must be 0 <= low < high <= 100"
+            )
+        niter = int(self.seg_param_root.param("niter").value())
+        if niter < 1:
+            niter = 200
+
+        if self.seg_param_root.param("norm_percentile_low").value() != low:
+            self.seg_param_root.param("norm_percentile_low").setValue(low)
+        if self.seg_param_root.param("norm_percentile_high").value() != high:
+            self.seg_param_root.param("norm_percentile_high").setValue(high)
+        if self.seg_param_root.param("niter").value() != niter:
+            self.seg_param_root.param("niter").setValue(niter)
+        return {
+            "diameter": diameter,
+            "flow_threshold": float(
+                self.seg_param_root.param("flow_threshold").value()
+            ),
+            "cellprob_threshold": float(
+                self.seg_param_root.param("cellprob_threshold").value()
+            ),
+            "percentile": (low, high),
+            "niter": niter,
+        }
+
+    def get_preprocessing_parameters(self):
+        sharpen_radius = max(
+            0, float(self.preprocessing_param_root.param("sharpen_radius").value())
+        )
+        smooth_radius = max(
+            0, float(self.preprocessing_param_root.param("smooth_radius").value())
+        )
+        tile_norm_blocksize = max(
+            0, float(self.preprocessing_param_root.param("tile_norm_blocksize").value())
+        )
+        tile_norm_smooth3D = max(
+            0, float(self.preprocessing_param_root.param("tile_norm_smooth3D").value())
+        )
+        if tile_norm_blocksize > self.Ly and tile_norm_blocksize > self.Lx:
+            print(
+                "GUI_ERROR: tile size (tile_norm) bigger than both image dimensions, disabling"
+            )
+            tile_norm_blocksize = 0
+
+        return {
+            "sharpen_radius": sharpen_radius,
+            "smooth_radius": smooth_radius,
+            "tile_norm_blocksize": tile_norm_blocksize,
+            "tile_norm_smooth3D": tile_norm_smooth3D,
+            "norm3D": bool(self.preprocessing_param_root.param("norm3D").value()),
+            "invert": False,
+        }
+
+    def set_preprocessing_parameters(self, params):
+        self.preprocessing_param_root.param("sharpen_radius").setValue(
+            params["sharpen_radius"]
+        )
+        self.preprocessing_param_root.param("smooth_radius").setValue(
+            params["smooth_radius"]
+        )
+        self.preprocessing_param_root.param("tile_norm_blocksize").setValue(
+            params["tile_norm_blocksize"]
+        )
+        self.preprocessing_param_root.param("tile_norm_smooth3D").setValue(
+            params["tile_norm_smooth3D"]
+        )
+        self.preprocessing_param_root.param("norm3D").setValue(params["norm3D"])
 
     def level_change(self, r):
         r = ["red", "green", "blue"].index(r)
@@ -743,9 +1512,15 @@ class MainW(QMainWindow):
 
     def keyPressEvent(self, event):
         if self.loaded:
-            if not (event.modifiers() &
-                    (QtCore.Qt.ControlModifier | QtCore.Qt.ShiftModifier |
-                     QtCore.Qt.AltModifier) or self.in_stroke):
+            if not (
+                event.modifiers()
+                & (
+                    QtCore.Qt.ControlModifier
+                    | QtCore.Qt.ShiftModifier
+                    | QtCore.Qt.AltModifier
+                )
+                or self.in_stroke
+            ):
                 updated = False
                 if len(self.current_point_set) > 0:
                     if event.key() == QtCore.Qt.Key_Return:
@@ -753,17 +1528,23 @@ class MainW(QMainWindow):
                 else:
                     nviews = self.ViewDropDown.count() - 1
                     nviews += int(
-                        self.ViewDropDown.model().item(self.ViewDropDown.count() -
-                                                       1).isEnabled())
+                        self.ViewDropDown.model()
+                        .item(self.ViewDropDown.count() - 1)
+                        .isEnabled()
+                    )
                     if event.key() == QtCore.Qt.Key_X:
                         self.MCheckBox.toggle()
                     if event.key() == QtCore.Qt.Key_Z:
                         self.OCheckBox.toggle()
-                    if event.key() == QtCore.Qt.Key_Left or event.key(
-                    ) == QtCore.Qt.Key_A:
+                    if (
+                        event.key() == QtCore.Qt.Key_Left
+                        or event.key() == QtCore.Qt.Key_A
+                    ):
                         self.get_prev_image()
-                    elif event.key() == QtCore.Qt.Key_Right or event.key(
-                    ) == QtCore.Qt.Key_D:
+                    elif (
+                        event.key() == QtCore.Qt.Key_Right
+                        or event.key() == QtCore.Qt.Key_D
+                    ):
                         self.get_next_image()
                     elif event.key() == QtCore.Qt.Key_PageDown:
                         self.view = (self.view + 1) % (nviews)
@@ -776,8 +1557,9 @@ class MainW(QMainWindow):
                 if event.key() == QtCore.Qt.Key_Up or event.key() == QtCore.Qt.Key_W:
                     self.color = (self.color - 1) % (6)
                     self.RGBDropDown.setCurrentIndex(self.color)
-                elif event.key() == QtCore.Qt.Key_Down or event.key(
-                ) == QtCore.Qt.Key_S:
+                elif (
+                    event.key() == QtCore.Qt.Key_Down or event.key() == QtCore.Qt.Key_S
+                ):
                     self.color = (self.color + 1) % (6)
                     self.RGBDropDown.setCurrentIndex(self.color)
                 elif event.key() == QtCore.Qt.Key_R:
@@ -798,8 +1580,10 @@ class MainW(QMainWindow):
                     else:
                         self.color = 0
                     self.RGBDropDown.setCurrentIndex(self.color)
-                elif (event.key() == QtCore.Qt.Key_Comma or
-                      event.key() == QtCore.Qt.Key_Period):
+                elif (
+                    event.key() == QtCore.Qt.Key_Comma
+                    or event.key() == QtCore.Qt.Key_Period
+                ):
                     count = self.BrushChoose.count()
                     gci = self.BrushChoose.currentIndex()
                     if event.key() == QtCore.Qt.Key_Comma:
@@ -819,25 +1603,42 @@ class MainW(QMainWindow):
         else:
             self.autosave = False
 
-    def check_gpu(self, torch=True):
-        # also decide whether or not to use torch
-        self.useGPU.setChecked(False)
-        self.useGPU.setEnabled(False)
-        if core.use_gpu(use_torch=True):
-            self.useGPU.setEnabled(True)
-            self.useGPU.setChecked(True)
-        else:
-            self.useGPU.setStyleSheet("color: rgb(80,80,80);")
+    def _selected_segmentation_model(self):
+        model_name = self.ModelChooseC.currentText().strip()
+        is_cpsam = model_name.lower() == "cpsam"
+        return "cpsam" if is_cpsam else model_name, not is_cpsam
 
+    def run_selected_model(self):
+        model_name, custom = self._selected_segmentation_model()
+        if custom:
+            self.compute_segmentation(custom=True)
+        else:
+            self.compute_segmentation(model_name=model_name)
+
+    def apply_filter(self):
+        self.restore = "filter"
+        normalize_params = self.get_normalize_params()
+        if (
+            normalize_params["sharpen_radius"] == 0
+            and normalize_params["smooth_radius"] == 0
+            and normalize_params["tile_norm_blocksize"] == 0
+        ):
+            print("GUI_ERROR: no filtering settings on (use custom filter settings)")
+            self.restore = None
+            return
+        self.compute_saturation()
 
     def model_choose(self, custom=False):
-        index = self.ModelChooseC.currentIndex(
-        ) if custom else self.ModelChooseB.currentIndex()
+        if custom:
+            model_name, is_custom = self._selected_segmentation_model()
+            if model_name:
+                print(f"GUI_INFO: selected model {model_name}, loading now")
+                self.initialize_model(model_name=model_name, custom=is_custom)
+            return
+
+        index = self.ModelChooseB.currentIndex()
         if index > 0:
-            if custom:
-                model_name = self.ModelChooseC.currentText()
-            else:
-                model_name = self.net_names[index - 1]
+            model_name = self.net_names[index - 1]
             print(f"GUI_INFO: selected model {model_name}, loading now")
             self.initialize_model(model_name=model_name, custom=custom)
 
@@ -850,15 +1651,12 @@ class MainW(QMainWindow):
             self.scale_on = True
 
     def enable_buttons(self):
-        if len(self.model_strings) > 0:
-            self.ModelButtonC.setEnabled(True)
+        self.ModelButtonC.setEnabled(True)
         for i in range(len(self.StyleButtons)):
             self.StyleButtons[i].setEnabled(True)
 
-        for i in range(len(self.FilterButtons)):
-            self.FilterButtons[i].setEnabled(True)
-        if self.load_3D:
-            self.FilterButtons[-2].setEnabled(False)
+        self.reset_filter_button.setEnabled(not self.load_3D)
+        self.apply_filter_button.setEnabled(True)
 
         self.newmodel.setEnabled(True)
         self.loadMasks.setEnabled(True)
@@ -874,8 +1672,7 @@ class MainW(QMainWindow):
         self.setWindowTitle(self.filename)
 
     def disable_buttons_removeROIs(self):
-        if len(self.model_strings) > 0:
-            self.ModelButtonC.setEnabled(False)
+        self.ModelButtonC.setEnabled(False)
         for i in range(len(self.StyleButtons)):
             self.StyleButtons[i].setEnabled(False)
         self.newmodel.setEnabled(False)
@@ -933,7 +1730,7 @@ class MainW(QMainWindow):
             self.remove_cell(self.selected)
 
     def undo_action(self):
-        if (len(self.strokes) > 0 and self.strokes[-1][0][0] == self.currentZ):
+        if len(self.strokes) > 0 and self.strokes[-1][0][0] == self.currentZ:
             self.remove_stroke()
         else:
             # remove previous cell
@@ -1068,7 +1865,9 @@ class MainW(QMainWindow):
         idx = (idx - 1) % len(images)
         if self.series_dataset is not None:
             try:
-                io._load_series_item(self, self.series_dataset, idx, load_3D=self.load_3D)
+                io._load_series_item(
+                    self, self.series_dataset, idx, load_3D=self.load_3D
+                )
             except Exception as e:
                 print(f"ERROR: {e}")
                 QMessageBox.warning(self, "Load folder with pattern", str(e))
@@ -1128,9 +1927,13 @@ class MainW(QMainWindow):
             self.update_layer()
 
     def make_viewbox(self):
-        self.p0 = guiparts.ViewBoxNoRightDrag(parent=self, lockAspect=True,
-                                              name="plot1", border=[100, 100,
-                                                                    100], invertY=True)
+        self.p0 = guiparts.ViewBoxNoRightDrag(
+            parent=self,
+            lockAspect=True,
+            name="plot1",
+            border=[100, 100, 100],
+            invertY=True,
+        )
         self.p0.setCursor(QtCore.Qt.CrossCursor)
         self.brush_size = 3
         self.win.addItem(self.p0, 0, 0, rowspan=1, colspan=1)
@@ -1168,9 +1971,9 @@ class MainW(QMainWindow):
         self.opacity = 128  # how opaque masks should be
         self.outcolor = [200, 200, 255, 200]
         self.NZ, self.Ly, self.Lx = 1, 256, 256
-        self.saturation = self.saturation if hasattr(self, 'saturation') else []
+        self.saturation = self.saturation if hasattr(self, "saturation") else []
 
-        # only adjust the saturation if auto-adjust is on: 
+        # only adjust the saturation if auto-adjust is on:
         if self.autobtn.isChecked():
             for r in range(3):
                 self.saturation.append([[0, 255] for n in range(self.NZ)])
@@ -1212,7 +2015,7 @@ class MainW(QMainWindow):
         self.remove_roi_obj = None
 
     def delete_restore(self):
-        """ delete restored imgs but don't reset settings """
+        """delete restored imgs but don't reset settings"""
         if hasattr(self, "stack_filtered"):
             del self.stack_filtered
         if hasattr(self, "cellpix_orig"):
@@ -1222,14 +2025,14 @@ class MainW(QMainWindow):
             del self.cellpix_orig, self.cellpix_resize
 
     def clear_restore(self):
-        """ delete restored imgs and reset settings """
+        """delete restored imgs and reset settings"""
         print("GUI_INFO: clearing restored image")
         self.ViewDropDown.model().item(self.ViewDropDown.count() - 1).setEnabled(False)
         if self.ViewDropDown.currentIndex() == self.ViewDropDown.count() - 1:
             self.ViewDropDown.setCurrentIndex(0)
         self.delete_restore()
         self.restore = None
-        self.ratio = 1.
+        self.ratio = 1.0
         self.set_normalize_params(self.get_normalize_params())
 
     def brush_choose(self):
@@ -1266,14 +2069,16 @@ class MainW(QMainWindow):
         if self.selected > 0:
             z = self.currentZ
             self.layerz[self.cellpix[z] == idx] = np.array(
-                [255, 255, 255, self.opacity])
+                [255, 255, 255, self.opacity]
+            )
             self.update_layer()
 
     def select_cell_multi(self, idx):
         if idx > 0:
             z = self.currentZ
             self.layerz[self.cellpix[z] == idx] = np.array(
-                [255, 255, 255, self.opacity])
+                [255, 255, 255, self.opacity]
+            )
             self.update_layer()
 
     def unselect_cell(self):
@@ -1282,21 +2087,25 @@ class MainW(QMainWindow):
             if idx < (self.ncells.get() + 1):
                 z = self.currentZ
                 self.layerz[self.cellpix[z] == idx] = np.append(
-                    self.cellcolors[idx], self.opacity)
+                    self.cellcolors[idx], self.opacity
+                )
                 if self.outlinesOn:
                     self.layerz[self.outpix[z] == idx] = np.array(self.outcolor).astype(
-                        np.uint8)
-                    #[0,0,0,self.opacity])
+                        np.uint8
+                    )
+                    # [0,0,0,self.opacity])
                 self.update_layer()
         self.selected = 0
 
     def unselect_cell_multi(self, idx):
         z = self.currentZ
-        self.layerz[self.cellpix[z] == idx] = np.append(self.cellcolors[idx],
-                                                        self.opacity)
+        self.layerz[self.cellpix[z] == idx] = np.append(
+            self.cellcolors[idx], self.opacity
+        )
         if self.outlinesOn:
             self.layerz[self.outpix[z] == idx] = np.array(self.outcolor).astype(
-                np.uint8)
+                np.uint8
+            )
             # [0,0,0,self.opacity])
         self.update_layer()
 
@@ -1316,7 +2125,6 @@ class MainW(QMainWindow):
             self.ClearButton.setEnabled(False)
         if self.NZ == 1:
             io._save_sets_with_check(self)
-
 
     def remove_single_cell(self, idx):
         # remove from manual array
@@ -1341,15 +2149,17 @@ class MainW(QMainWindow):
 
         if self.NZ == 1:
             self.removed_cell = [
-                self.ismanual[idx - 1], self.cellcolors[idx],
+                self.ismanual[idx - 1],
+                self.cellcolors[idx],
                 np.nonzero(cp),
-                np.nonzero(op)
+                np.nonzero(op),
             ]
             self.redo.setEnabled(True)
             ar, ac = self.removed_cell[2]
             d = datetime.datetime.now()
             self.track_changes.append(
-                [d.strftime("%m/%d/%Y, %H:%M:%S"), "removed mask", [ar, ac]])
+                [d.strftime("%m/%d/%Y, %H:%M:%S"), "removed mask", [ar, ac]]
+            )
         # remove cell from lists
         self.ismanual = np.delete(self.ismanual, idx - 1)
         self.cellcolors = np.delete(self.cellcolors, [idx], axis=0)
@@ -1373,8 +2183,9 @@ class MainW(QMainWindow):
         y_loc = self.p0.viewRect().y() + (roi_height / 2)
 
         pos = [x_loc, y_loc]
-        roi = pg.RectROI(pos, [roi_width, roi_height], pen=pg.mkPen("y", width=2),
-                         removable=True)
+        roi = pg.RectROI(
+            pos, [roi_width, roi_height], pen=pg.mkPen("y", width=2), removable=True
+        )
         roi.sigRemoveRequested.connect(self.remove_roi)
         roi.sigRegionChangeFinished.connect(self.roi_changed)
         self.p0.addItem(roi)
@@ -1415,8 +2226,9 @@ class MainW(QMainWindow):
             for z in range(self.NZ):
                 ar0, ac0 = np.nonzero(self.cellpix[z] == self.prev_selected)
                 ar1, ac1 = np.nonzero(self.cellpix[z] == self.selected)
-                touching = np.logical_and((ar0[:, np.newaxis] - ar1) < 3,
-                                          (ac0[:, np.newaxis] - ac1) < 3).sum()
+                touching = np.logical_and(
+                    (ar0[:, np.newaxis] - ar1) < 3, (ac0[:, np.newaxis] - ac1) < 3
+                ).sum()
                 ar = np.hstack((ar0, ar1))
                 ac = np.hstack((ac0, ac1))
                 vr0, vc0 = np.nonzero(self.outpix[z] == self.prev_selected)
@@ -1426,8 +2238,9 @@ class MainW(QMainWindow):
                 if touching > 0:
                     mask = np.zeros((np.ptp(ar) + 4, np.ptp(ac) + 4), np.uint8)
                     mask[ar - ar.min() + 2, ac - ac.min() + 2] = 1
-                    contours = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                                cv2.CHAIN_APPROX_NONE)
+                    contours = cv2.findContours(
+                        mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+                    )
                     pvc, pvr = contours[-2][0].squeeze().T
                     vr, vc = pvr + ar.min() - 2, pvc + ac.min() - 2
 
@@ -1475,14 +2288,17 @@ class MainW(QMainWindow):
             col2mask = ccol[cellpix]
             if self.masksOn:
                 col2mask = np.concatenate(
-                    (col2mask, self.opacity * (cellpix[:, np.newaxis] > 0)), axis=-1)
+                    (col2mask, self.opacity * (cellpix[:, np.newaxis] > 0)), axis=-1
+                )
             else:
-                col2mask = np.concatenate((col2mask, 0 * (cellpix[:, np.newaxis] > 0)),
-                                          axis=-1)
+                col2mask = np.concatenate(
+                    (col2mask, 0 * (cellpix[:, np.newaxis] > 0)), axis=-1
+                )
             self.layerz[stroke[:, 1], stroke[:, 2], :] = col2mask
             if self.outlinesOn:
-                self.layerz[stroke[outpix, 1], stroke[outpix,
-                                                      2]] = np.array(self.outcolor)
+                self.layerz[stroke[outpix, 1], stroke[outpix, 2]] = np.array(
+                    self.outcolor
+                )
             if delete_points:
                 del self.current_point_set[stroke_ind]
             self.update_layer()
@@ -1490,9 +2306,12 @@ class MainW(QMainWindow):
         del self.strokes[stroke_ind]
 
     def plot_clicked(self, event):
-        if event.button()==QtCore.Qt.LeftButton \
-                and not event.modifiers() & (QtCore.Qt.ShiftModifier | QtCore.Qt.AltModifier)\
-                and not self.removing_region:
+        if (
+            event.button() == QtCore.Qt.LeftButton
+            and not event.modifiers()
+            & (QtCore.Qt.ShiftModifier | QtCore.Qt.AltModifier)
+            and not self.removing_region
+        ):
             if event.double():
                 try:
                     self.p0.setYRange(0, self.Ly + self.pr)
@@ -1564,16 +2383,21 @@ class MainW(QMainWindow):
         self.Ly, self.Lx, _ = self.stack[self.currentZ].shape
 
         if self.view == 0 or self.view == self.ViewDropDown.count() - 1:
-            image = self.stack[
-                self.currentZ] if self.view == 0 else self.stack_filtered[self.currentZ]
+            image = (
+                self.stack[self.currentZ]
+                if self.view == 0
+                else self.stack_filtered[self.currentZ]
+            )
             if self.color == 0:
                 self.img.setImage(image, autoLevels=False, lut=None)
                 if self.nchan > 1:
-                    levels = np.array([
-                        self.saturation[0][self.currentZ],
-                        self.saturation[1][self.currentZ],
-                        self.saturation[2][self.currentZ]
-                    ])
+                    levels = np.array(
+                        [
+                            self.saturation[0][self.currentZ],
+                            self.saturation[1][self.currentZ],
+                            self.saturation[2][self.currentZ],
+                        ]
+                    )
                     self.img.setLevels(levels)
                 else:
                     self.img.setLevels(self.saturation[0][self.currentZ])
@@ -1588,7 +2412,7 @@ class MainW(QMainWindow):
             elif self.color == 4:
                 if self.nchan > 1:
                     # exclude channels with no data:
-                    ranges = np.ptp(image, tuple(range(image.ndim-1)))
+                    ranges = np.ptp(image, tuple(range(image.ndim - 1)))
                     range_mask = ranges > 1e-5
                     image = image[..., range_mask]
                     image = image.mean(axis=-1)
@@ -1610,20 +2434,20 @@ class MainW(QMainWindow):
             self.img.setLevels([0.0, 255.0])
 
         for r in range(3):
-            self.sliders[r].setValue([
-                self.saturation[r][self.currentZ][0],
-                self.saturation[r][self.currentZ][1]
-            ])
+            self.sliders[r].setValue(
+                [
+                    self.saturation[r][self.currentZ][0],
+                    self.saturation[r][self.currentZ][1],
+                ]
+            )
         self.win.show()
         self.show()
-
 
     def update_layer(self):
         if self.masksOn or self.outlinesOn:
             self.layer.setImage(self.layerz, autoLevels=False)
         self.win.show()
         self.show()
-
 
     def add_set(self):
         if len(self.current_point_set) > 0:
@@ -1635,8 +2459,9 @@ class MainW(QMainWindow):
                 if median is not None:
                     self.removed_cell = []
                     self.toggle_mask_ops()
-                    self.cellcolors = np.append(self.cellcolors, color[np.newaxis, :],
-                                                axis=0)
+                    self.cellcolors = np.append(
+                        self.cellcolors, color[np.newaxis, :], axis=0
+                    )
                     self.ncells += 1
                     self.ismanual = np.append(self.ismanual, True)
                     if self.NZ == 1:
@@ -1652,27 +2477,32 @@ class MainW(QMainWindow):
     def add_mask(self, points=None, color=(100, 200, 50), dense=True):
         # points is list of strokes
         points_all = np.concatenate(points, axis=0)
-        
+
         # loop over z values
         median = []
         zdraw = np.unique(points_all[:, 0])
         z = 0
-        ars, acs, vrs, vcs = np.zeros(0, "int"), np.zeros(0, "int"), np.zeros(
-            0, "int"), np.zeros(0, "int")
+        ars, acs, vrs, vcs = (
+            np.zeros(0, "int"),
+            np.zeros(0, "int"),
+            np.zeros(0, "int"),
+            np.zeros(0, "int"),
+        )
         for stroke in points:
             stroke = np.concatenate(stroke, axis=0).reshape(-1, 4)
             vr = stroke[:, 1]
             vc = stroke[:, 2]
             # get points inside drawn points
             mask = np.zeros((np.ptp(vr) + 4, np.ptp(vc) + 4), np.uint8)
-            pts = np.stack((vc - vc.min() + 2, vr - vr.min() + 2),
-                           axis=-1)[:, np.newaxis, :]
+            pts = np.stack((vc - vc.min() + 2, vr - vr.min() + 2), axis=-1)[
+                :, np.newaxis, :
+            ]
             mask = cv2.fillPoly(mask, [pts], (255, 0, 0))
             ar, ac = np.nonzero(mask)
             ar, ac = ar + vr.min() - 2, ac + vc.min() - 2
             # get dense outline
             contours = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            pvc, pvr = contours[-2][0][:,0].T
+            pvc, pvr = contours[-2][0][:, 0].T
             vr, vc = pvr + vr.min() - 2, pvc + vc.min() - 2
             # concatenate all points
             ar, ac = np.hstack((np.vstack((vr, vc)), np.vstack((ar, ac))))
@@ -1686,26 +2516,28 @@ class MainW(QMainWindow):
                 # compute outline of new mask
                 mask = np.zeros((np.ptp(vr) + 4, np.ptp(vc) + 4), np.uint8)
                 mask[ar - vr.min() + 2, ac - vc.min() + 2] = 1
-                contours = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                            cv2.CHAIN_APPROX_NONE)
-                pvc, pvr = contours[-2][0][:,0].T
+                contours = cv2.findContours(
+                    mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+                )
+                pvc, pvr = contours[-2][0][:, 0].T
                 vr, vc = pvr + vr.min() - 2, pvc + vc.min() - 2
             ars = np.concatenate((ars, ar), axis=0)
             acs = np.concatenate((acs, ac), axis=0)
             vrs = np.concatenate((vrs, vr), axis=0)
             vcs = np.concatenate((vcs, vc), axis=0)
-            
+
         self.draw_mask(z, ars, acs, vrs, vcs, color)
         median.append(np.array([np.median(ars), np.median(acs)]))
 
         self.zdraw.append(zdraw)
         d = datetime.datetime.now()
         self.track_changes.append(
-            [d.strftime("%m/%d/%Y, %H:%M:%S"), "added mask", [ar, ac]])
+            [d.strftime("%m/%d/%Y, %H:%M:%S"), "added mask", [ar, ac]]
+        )
         return median
 
     def draw_mask(self, z, ar, ac, vr, vc, color, idx=None):
-        """ draw single mask using outlines and area """
+        """draw single mask using outlines and area"""
         if idx is None:
             idx = self.ncells + 1
         self.cellpix[z, vr, vc] = idx
@@ -1716,12 +2548,15 @@ class MainW(QMainWindow):
                 self.cellpix_resize[z, vr, vc] = idx
                 self.cellpix_resize[z, ar, ac] = idx
                 self.outpix_resize[z, vr, vc] = idx
-                self.cellpix_orig[z, (vr / self.ratio).astype(int),
-                                  (vc / self.ratio).astype(int)] = idx
-                self.cellpix_orig[z, (ar / self.ratio).astype(int),
-                                  (ac / self.ratio).astype(int)] = idx
-                self.outpix_orig[z, (vr / self.ratio).astype(int),
-                                 (vc / self.ratio).astype(int)] = idx
+                self.cellpix_orig[
+                    z, (vr / self.ratio).astype(int), (vc / self.ratio).astype(int)
+                ] = idx
+                self.cellpix_orig[
+                    z, (ar / self.ratio).astype(int), (ac / self.ratio).astype(int)
+                ] = idx
+                self.outpix_orig[
+                    z, (vr / self.ratio).astype(int), (vc / self.ratio).astype(int)
+                ] = idx
             else:
                 self.cellpix_orig[z, vr, vc] = idx
                 self.cellpix_orig[z, ar, ac] = idx
@@ -1731,14 +2566,16 @@ class MainW(QMainWindow):
                 vrr = (vr.copy() * self.ratio).astype(int)
                 vcr = (vc.copy() * self.ratio).astype(int)
                 mask = np.zeros((np.ptp(vrr) + 4, np.ptp(vcr) + 4), np.uint8)
-                pts = np.stack((vcr - vcr.min() + 2, vrr - vrr.min() + 2),
-                               axis=-1)[:, np.newaxis, :]
+                pts = np.stack((vcr - vcr.min() + 2, vrr - vrr.min() + 2), axis=-1)[
+                    :, np.newaxis, :
+                ]
                 mask = cv2.fillPoly(mask, [pts], (255, 0, 0))
                 arr, acr = np.nonzero(mask)
                 arr, acr = arr + vrr.min() - 2, acr + vcr.min() - 2
                 # get dense outline
-                contours = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                            cv2.CHAIN_APPROX_NONE)
+                contours = cv2.findContours(
+                    mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+                )
                 pvc, pvr = contours[-2][0].squeeze().T
                 vrr, vcr = pvr + vrr.min() - 2, pvc + vcr.min() - 2
                 # concatenate all points
@@ -1756,15 +2593,19 @@ class MainW(QMainWindow):
 
     def compute_scale(self):
         # get diameter from gui
-        diameter = self.segmentation_settings.diameter
+        diameter = self.get_segmentation_parameters()["diameter"]
         if not diameter:
             diameter = 30
 
         self.pr = int(diameter)
         self.radii_padding = int(self.pr * 1.25)
         self.radii = np.zeros((self.Ly + self.radii_padding, self.Lx, 4), np.uint8)
-        yy, xx = disk([self.Ly + self.radii_padding / 2 - 1, self.pr / 2 + 1],
-                      self.pr / 2, self.Ly + self.radii_padding, self.Lx)
+        yy, xx = disk(
+            [self.Ly + self.radii_padding / 2 - 1, self.pr / 2 + 1],
+            self.pr / 2,
+            self.Ly + self.radii_padding,
+            self.Lx,
+        )
         # rgb(150,50,150)
         self.radii[yy, xx, 0] = 150
         self.radii[yy, xx, 1] = 50
@@ -1779,7 +2620,6 @@ class MainW(QMainWindow):
         self.scale.setLevels([0.0, 255.0])
         self.win.show()
         self.show()
-
 
     def draw_layer(self):
         if self.resize:
@@ -1799,89 +2639,62 @@ class MainW(QMainWindow):
         self.layerz = np.zeros((self.Ly, self.Lx, 4), np.uint8)
         if self.masksOn:
             self.layerz[..., :3] = self.cellcolors[self.cellpix[self.currentZ], :]
-            self.layerz[..., 3] = self.opacity * (self.cellpix[self.currentZ]
-                                                  > 0).astype(np.uint8)
+            self.layerz[..., 3] = self.opacity * (
+                self.cellpix[self.currentZ] > 0
+            ).astype(np.uint8)
             if self.selected > 0:
                 self.layerz[self.cellpix[self.currentZ] == self.selected] = np.array(
-                    [255, 255, 255, self.opacity])
+                    [255, 255, 255, self.opacity]
+                )
             cZ = self.currentZ
             stroke_z = np.array([s[0][0] for s in self.strokes])
             inZ = np.nonzero(stroke_z == cZ)[0]
             if len(inZ) > 0:
                 for i in inZ:
                     stroke = np.array(self.strokes[i])
-                    self.layerz[stroke[:, 1], stroke[:,
-                                                     2]] = np.array([255, 0, 255, 100])
+                    self.layerz[stroke[:, 1], stroke[:, 2]] = np.array(
+                        [255, 0, 255, 100]
+                    )
         else:
             self.layerz[..., 3] = 0
 
         if self.outlinesOn:
             self.layerz[self.outpix[self.currentZ] > 0] = np.array(
-                self.outcolor).astype(np.uint8)
-
+                self.outcolor
+            ).astype(np.uint8)
 
     def set_normalize_params(self, normalize_params):
         from cellpose.models import normalize_default
+
         if self.restore != "filter":
             keys = list(normalize_params.keys()).copy()
             for key in keys:
                 if key != "percentile":
                     normalize_params[key] = normalize_default[key]
         normalize_params = {**normalize_default, **normalize_params}
-        out = self.check_filter_params(normalize_params["sharpen_radius"],
-                                       normalize_params["smooth_radius"],
-                                       normalize_params["tile_norm_blocksize"],
-                                       normalize_params["tile_norm_smooth3D"],
-                                       normalize_params["norm3D"],
-                                       normalize_params["invert"])
-
-
-    def check_filter_params(self, sharpen, smooth, tile_norm, smooth3D, norm3D, invert):
-        tile_norm = 0 if tile_norm < 0 else tile_norm
-        sharpen = 0 if sharpen < 0 else sharpen
-        smooth = 0 if smooth < 0 else smooth
-        smooth3D = 0 if smooth3D < 0 else smooth3D
-        norm3D = bool(norm3D)
-        invert = bool(invert)
-        if tile_norm > self.Ly and tile_norm > self.Lx:
-            print(
-                "GUI_ERROR: tile size (tile_norm) bigger than both image dimensions, disabling"
-            )
-            tile_norm = 0
-        self.filt_edits[0].setText(str(sharpen))
-        self.filt_edits[1].setText(str(smooth))
-        self.filt_edits[2].setText(str(tile_norm))
-        self.filt_edits[3].setText(str(smooth3D))
-        self.norm3D_cb.setChecked(norm3D)
-        return sharpen, smooth, tile_norm, smooth3D, norm3D, invert
+        self.set_preprocessing_parameters(
+            {
+                "sharpen_radius": max(0, normalize_params["sharpen_radius"]),
+                "smooth_radius": max(0, normalize_params["smooth_radius"]),
+                "tile_norm_blocksize": max(0, normalize_params["tile_norm_blocksize"]),
+                "tile_norm_smooth3D": max(0, normalize_params["tile_norm_smooth3D"]),
+                "norm3D": bool(normalize_params["norm3D"]),
+                "invert": bool(normalize_params["invert"]),
+            }
+        )
+        params = self.get_preprocessing_parameters()
+        self.set_preprocessing_parameters(params)
 
     def get_normalize_params(self):
-        percentile = [
-            self.segmentation_settings.low_percentile,
-            self.segmentation_settings.high_percentile,
-        ]
-        normalize_params = {"percentile": percentile}
-        norm3D = self.norm3D_cb.isChecked()
-        normalize_params["norm3D"] = norm3D
-        sharpen = float(self.filt_edits[0].text())
-        smooth = float(self.filt_edits[1].text())
-        tile_norm = float(self.filt_edits[2].text())
-        smooth3D = float(self.filt_edits[3].text())
-        invert = False
-        out = self.check_filter_params(sharpen, smooth, tile_norm, smooth3D, norm3D,
-                                        invert)
-        sharpen, smooth, tile_norm, smooth3D, norm3D, invert = out
-        normalize_params["sharpen_radius"] = sharpen
-        normalize_params["smooth_radius"] = smooth
-        normalize_params["tile_norm_blocksize"] = tile_norm
-        normalize_params["tile_norm_smooth3D"] = smooth3D
-        normalize_params["invert"] = invert
+        segmentation_params = self.get_segmentation_parameters()
+        preprocessing_params = self.get_preprocessing_parameters()
+        self.set_preprocessing_parameters(preprocessing_params)
+        return {
+            **normalize_default,
+            "percentile": segmentation_params["percentile"],
+            **preprocessing_params,
+        }
 
-        from cellpose.models import normalize_default
-        normalize_params = {**normalize_default, **normalize_params}
-
-        return normalize_params
-    
     def compute_saturation_if_checked(self):
         if self.autobtn.isChecked():
             self.compute_saturation()
@@ -1912,27 +2725,38 @@ class MainW(QMainWindow):
             )
             img_norm = self.stack.copy()
             if sharpen > 0 or smooth > 0:
-                img_norm = smooth_sharpen_img(self.stack, sharpen_radius=sharpen,
-                                              smooth_radius=smooth)
+                img_norm = smooth_sharpen_img(
+                    self.stack, sharpen_radius=sharpen, smooth_radius=smooth
+                )
 
             if tile_norm > 0:
-                img_norm = normalize99_tile(img_norm, blocksize=tile_norm,
-                                            lower=percentile[0], upper=percentile[1],
-                                            smooth3D=smooth3D, norm3D=norm3D)
+                img_norm = normalize99_tile(
+                    img_norm,
+                    blocksize=tile_norm,
+                    lower=percentile[0],
+                    upper=percentile[1],
+                    smooth3D=smooth3D,
+                    norm3D=norm3D,
+                )
             # convert to 0->255
             img_norm_min = img_norm.min()
             img_norm_max = img_norm.max()
             for c in range(img_norm.shape[-1]):
                 if np.ptp(img_norm[..., c]) > 1e-3:
                     img_norm[..., c] -= img_norm_min
-                    img_norm[..., c] /= (img_norm_max - img_norm_min)
+                    img_norm[..., c] /= img_norm_max - img_norm_min
             img_norm *= 255
             self.stack_filtered = img_norm
-            self.ViewDropDown.model().item(self.ViewDropDown.count() -
-                                           1).setEnabled(True)
+            self.ViewDropDown.model().item(self.ViewDropDown.count() - 1).setEnabled(
+                True
+            )
             self.ViewDropDown.setCurrentIndex(self.ViewDropDown.count() - 1)
         else:
-            img_norm = self.stack if self.restore is None or self.restore == "filter" else self.stack_filtered
+            img_norm = (
+                self.stack
+                if self.restore is None or self.restore == "filter"
+                else self.stack_filtered
+            )
 
         if self.autobtn.isChecked():
             self.saturation = []
@@ -1943,8 +2767,8 @@ class MainW(QMainWindow):
                         x01 = np.percentile(img_norm[..., c], percentile[0])
                         x99 = np.percentile(img_norm[..., c], percentile[1])
                         if invert:
-                            x01i = 255. - x99
-                            x99i = 255. - x01
+                            x01i = 255.0 - x99
+                            x99i = 255.0 - x01
                             x01, x99 = x01i, x99i
                         for n in range(self.NZ):
                             self.saturation[-1].append([x01, x99])
@@ -1957,13 +2781,13 @@ class MainW(QMainWindow):
                                 x01 = np.percentile(img_norm[..., c], percentile[0])
                                 x99 = np.percentile(img_norm[..., c], percentile[1])
                             if invert:
-                                x01i = 255. - x99
-                                x99i = 255. - x01
+                                x01i = 255.0 - x99
+                                x99i = 255.0 - x01
                                 x01, x99 = x01i, x99i
                             self.saturation[-1].append([x01, x99])
                 else:
                     for n in range(self.NZ):
-                        self.saturation[-1].append([0, 255.])
+                        self.saturation[-1].append([0, 255.0])
             print(self.saturation[2][self.currentZ])
 
             if img_norm.shape[-1] == 1:
@@ -1972,7 +2796,6 @@ class MainW(QMainWindow):
 
         # self.autobtn.setChecked(True)
         self.update_plot()
-
 
     def get_model_path(self, custom=False):
         if custom:
@@ -1988,18 +2811,23 @@ class MainW(QMainWindow):
         if model_name is None or custom:
             self.get_model_path(custom=custom)
             if not os.path.exists(self.current_model_path):
-                raise ValueError("Model file not found: need to specify model (use dropdown)")
+                raise ValueError(
+                    "Model file not found: need to specify model (use dropdown)"
+                )
 
         if custom or model_name is None or not isinstance(model_name, str):
-            self.model = models.CellposeModel(gpu=self.useGPU.isChecked(),
-                                              pretrained_model=self.current_model_path)
+            self.model = models.CellposeModel(
+                gpu=True, pretrained_model=self.current_model_path
+            )
         else:
             self.current_model = model_name
             self.current_model_path = os.fspath(
-                models.MODEL_DIR.joinpath(self.current_model))
+                models.MODEL_DIR.joinpath(self.current_model)
+            )
 
-            self.model = models.CellposeModel(gpu=self.useGPU.isChecked(),
-                                             pretrained_model=self.current_model)
+            self.model = models.CellposeModel(
+                gpu=True, pretrained_model=self.current_model
+            )
 
     def add_model(self):
         io._add_model(self)
@@ -2016,14 +2844,27 @@ class MainW(QMainWindow):
 
         current_train_data_folder = self.training_params.get("train_data_folder", "")
         if not current_train_data_folder:
-            current_train_data_folder = os.path.dirname(self.filename) if self.filename else ""
+            current_train_data_folder = (
+                os.path.dirname(self.filename) if self.filename else ""
+            )
             self.training_params["train_data_folder"] = current_train_data_folder
 
-        self.train_data, self.train_labels, self.train_files, restore, normalize_params = ([], [], [], None, copy.deepcopy(normalize_default))
+        (
+            self.train_data,
+            self.train_labels,
+            self.train_files,
+            restore,
+            normalize_params,
+        ) = ([], [], [], None, copy.deepcopy(normalize_default))
         if current_train_data_folder:
             try:
-                self.train_data, self.train_labels, self.train_files, restore, normalize_params = self._get_train_dataset(
-                    current_train_data_folder, nested=True)
+                (
+                    self.train_data,
+                    self.train_labels,
+                    self.train_files,
+                    restore,
+                    normalize_params,
+                ) = self._get_train_dataset(current_train_data_folder, nested=True)
             except ValueError as e:
                 self.logger.info(str(e))
                 self.train_files = []
@@ -2039,8 +2880,13 @@ class MainW(QMainWindow):
                 QMessageBox.warning(self, "Train", "No training folder specified.")
                 return
             try:
-                self.train_data, self.train_labels, self.train_files, restore, normalize_params = self._get_train_dataset(
-                    train_data_folder, nested=True)
+                (
+                    self.train_data,
+                    self.train_labels,
+                    self.train_files,
+                    restore,
+                    normalize_params,
+                ) = self._get_train_dataset(train_data_folder, nested=True)
             except ValueError as e:
                 self.logger.info(str(e))
                 QMessageBox.warning(self, "Train", str(e))
@@ -2048,43 +2894,51 @@ class MainW(QMainWindow):
 
             if len(self.train_files) == 0:
                 QMessageBox.warning(
-                    self, "Train", "No valid training images with _seg.npy found in folder."
+                    self,
+                    "Train",
+                    "No valid training images with _seg.npy found in folder.",
                 )
                 return
             self.logger.info(
-                f"training with {[os.path.split(f)[1] for f in self.train_files]}")
+                f"training with {[os.path.split(f)[1] for f in self.train_files]}"
+            )
             self.train_model(restore=restore, normalize_params=normalize_params)
         else:
             print("GUI_INFO: training cancelled")
 
     def train_model(self, restore=None, normalize_params=None):
         from cellpose.models import normalize_default
+
         if normalize_params is None:
             normalize_params = copy.deepcopy(normalize_default)
         model_type = models.MODEL_NAMES[self.training_params["model_index"]]
         self.logger.info(f"training new model starting at model {model_type}")
         self.current_model = model_type
-        
-        self.model = models.CellposeModel(gpu=self.useGPU.isChecked(),
-                                          model_type=model_type)
+
+        self.model = models.CellposeModel(gpu=True, model_type=model_type)
         save_path = os.fspath(models.MODEL_DIR.joinpath("custom"))
         os.makedirs(save_path, exist_ok=True)
 
         print("GUI_INFO: name of new model: " + self.training_params["model_name"])
         self.new_model_path, train_losses = train.train_seg(
-            self.model.net, train_data=self.train_data, train_labels=self.train_labels,
-            normalize=normalize_params, min_train_masks=0,
-            save_path=save_path, nimg_per_epoch=max(2, len(self.train_data)),
+            self.model.net,
+            train_data=self.train_data,
+            train_labels=self.train_labels,
+            normalize=normalize_params,
+            min_train_masks=0,
+            save_path=save_path,
+            nimg_per_epoch=max(2, len(self.train_data)),
             learning_rate=self.training_params["learning_rate"],
             weight_decay=self.training_params["weight_decay"],
             n_epochs=self.training_params["n_epochs"],
             model_name=self.training_params["model_name"],
-            save_to_models_dir=False)[:2]
+            save_to_models_dir=False,
+        )[:2]
         # save train losses
         np.save(str(self.new_model_path) + "_train_losses.npy", train_losses)
         # run model on next image
         io._add_model(self, self.new_model_path)
-        diam_labels = self.model.net.diam_labels.item()  #.copy()
+        diam_labels = self.model.net.diam_labels.item()  # .copy()
         self.new_model_ind = len(self.model_strings)
         self.autorun = True
         self.clear_all()
@@ -2103,41 +2957,44 @@ class MainW(QMainWindow):
         return get_image_files(folder, "_masks", look_one_level_down=nested)
 
     def _get_train_dataset(self, folder, nested=True):
-        image_names = self.get_training_image_files(
-            folder, nested=nested
-        )
+        image_names = self.get_training_image_files(folder, nested=nested)
         return io._get_train_set(image_names)
-
 
     def compute_cprob(self):
         if self.recompute_masks:
-            flow_threshold = self.segmentation_settings.flow_threshold
-            cellprob_threshold = self.segmentation_settings.cellprob_threshold
-            niter = self.segmentation_settings.niter
-            min_size = int(self.min_size.text()) if not isinstance(
-                self.min_size, int) else self.min_size
+            segmentation_params = self.get_segmentation_parameters()
+            min_size = (
+                int(self.min_size.text())
+                if not isinstance(self.min_size, int)
+                else self.min_size
+            )
 
             self.logger.info(
-                    "computing masks with cell prob=%0.3f, flow error threshold=%0.3f" %
-                    (cellprob_threshold, flow_threshold))
-            
+                "computing masks with cell prob=%0.3f, flow error threshold=%0.3f"
+                % (
+                    segmentation_params["cellprob_threshold"],
+                    segmentation_params["flow_threshold"],
+                )
+            )
+
             try:
                 dP = self.flows[2].squeeze()
                 cellprob = self.flows[3].squeeze()
             except IndexError:
                 self.logger.error("Flows don't exist, try running model again.")
                 return
-            
+
             maski = dynamics.resize_and_compute_masks(
                 dP=dP,
                 cellprob=cellprob,
-                niter=niter,
+                niter=segmentation_params["niter"],
                 do_3D=self.load_3D,
                 min_size=min_size,
-                # max_size_fraction=min_size_fraction, # Leave as default 
-                cellprob_threshold=cellprob_threshold, 
-                flow_threshold=flow_threshold)
-            
+                # max_size_fraction=min_size_fraction, # Leave as default
+                cellprob_threshold=segmentation_params["cellprob_threshold"],
+                flow_threshold=segmentation_params["flow_threshold"],
+            )
+
             self.masksOn = True
             if not self.OCheckBox.isChecked():
                 self.MCheckBox.setChecked(True)
@@ -2146,7 +3003,6 @@ class MainW(QMainWindow):
             self.logger.info("%d cells found" % (len(np.unique(maski)[1:])))
             io._masks_to_gui(self, maski, outlines=None)
             self.show()
-
 
     def compute_segmentation(self, custom=False, model_name=None, load_model=True):
         self.progress.setValue(0)
@@ -2158,39 +3014,55 @@ class MainW(QMainWindow):
                 self.initialize_model(model_name=model_name, custom=custom)
             self.progress.setValue(10)
             do_3D = self.load_3D
-            stitch_threshold = float(self.stitch_threshold.text()) if not isinstance(
-                self.stitch_threshold, float) else self.stitch_threshold
-            anisotropy = float(self.anisotropy.text()) if not isinstance(
-                self.anisotropy, float) else self.anisotropy
-            flow3D_smooth = float(self.flow3D_smooth.text()) if not isinstance(
-                self.flow3D_smooth, float) else self.flow3D_smooth
-            min_size = int(self.min_size.text()) if not isinstance(
-                self.min_size, int) else self.min_size
-            
-            do_3D = False if stitch_threshold > 0. else do_3D
+            stitch_threshold = (
+                float(self.stitch_threshold.text())
+                if not isinstance(self.stitch_threshold, float)
+                else self.stitch_threshold
+            )
+            anisotropy = (
+                float(self.anisotropy.text())
+                if not isinstance(self.anisotropy, float)
+                else self.anisotropy
+            )
+            flow3D_smooth = (
+                float(self.flow3D_smooth.text())
+                if not isinstance(self.flow3D_smooth, float)
+                else self.flow3D_smooth
+            )
+            min_size = (
+                int(self.min_size.text())
+                if not isinstance(self.min_size, int)
+                else self.min_size
+            )
+
+            do_3D = False if stitch_threshold > 0.0 else do_3D
 
             if self.restore == "filter":
                 data = self.stack_filtered.copy().squeeze()
             else:
                 data = self.stack.copy().squeeze()
-            
-            flow_threshold = self.segmentation_settings.flow_threshold
-            cellprob_threshold = self.segmentation_settings.cellprob_threshold
-            diameter = self.segmentation_settings.diameter
-            niter = self.segmentation_settings.niter
-            
+
+            segmentation_params = self.get_segmentation_parameters()
+
             normalize_params = self.get_normalize_params()
             print(normalize_params)
             try:
                 masks, flows = self.model.eval(
-                    data, 
-                    diameter=diameter,
-                    cellprob_threshold=cellprob_threshold,
-                    flow_threshold=flow_threshold, do_3D=do_3D, niter=niter,
-                    normalize=normalize_params, stitch_threshold=stitch_threshold,
-                    anisotropy=anisotropy, flow3D_smooth=flow3D_smooth,
-                    min_size=min_size, channel_axis=-1,
-                    progress=self.progress, z_axis=0 if self.NZ > 1 else None)[:2]
+                    data,
+                    diameter=segmentation_params["diameter"],
+                    cellprob_threshold=segmentation_params["cellprob_threshold"],
+                    flow_threshold=segmentation_params["flow_threshold"],
+                    do_3D=do_3D,
+                    niter=segmentation_params["niter"],
+                    normalize=normalize_params,
+                    stitch_threshold=stitch_threshold,
+                    anisotropy=anisotropy,
+                    flow3D_smooth=flow3D_smooth,
+                    min_size=min_size,
+                    channel_axis=-1,
+                    progress=self.progress,
+                    z_axis=0 if self.NZ > 1 else None,
+                )[:2]
             except Exception as e:
                 print("NET ERROR: %s" % e)
                 self.progress.setValue(0)
@@ -2201,13 +3073,14 @@ class MainW(QMainWindow):
             # convert flows to uint8 and resize to original image size
             flows_new = []
             flows_new.append(flows[0].copy())  # RGB flow
-            flows_new.append((np.clip(normalize99(flows[2].copy()), 0, 1) *
-                              255).astype("uint8"))  # cellprob
-            flows_new.append(flows[1].copy()) # XY flows
-            flows_new.append(flows[2].copy()) # original cellprob
+            flows_new.append(
+                (np.clip(normalize99(flows[2].copy()), 0, 1) * 255).astype("uint8")
+            )  # cellprob
+            flows_new.append(flows[1].copy())  # XY flows
+            flows_new.append(flows[2].copy())  # original cellprob
 
             if self.load_3D:
-                if stitch_threshold == 0.:
+                if stitch_threshold == 0.0:
                     flows_new.append((flows[1][0] / 10 * 127 + 127).astype("uint8"))
                 else:
                     flows_new.append(np.zeros(flows[1][0].shape, dtype="uint8"))
@@ -2220,8 +3093,13 @@ class MainW(QMainWindow):
                     self.flows = []
                     for j in range(len(flows_new)):
                         self.flows.append(
-                            resize_image(flows_new[j], Ly=self.Ly, Lx=self.Lx,
-                                        interpolation=cv2.INTER_NEAREST))
+                            resize_image(
+                                flows_new[j],
+                                Ly=self.Ly,
+                                Lx=self.Lx,
+                                interpolation=cv2.INTER_NEAREST,
+                            )
+                        )
                 else:
                     self.flows = flows_new
             else:
@@ -2232,14 +3110,25 @@ class MainW(QMainWindow):
                 for j in range(len(flows_new)):
                     flow0 = flows_new[j]
                     if Ly0 != Ly:
-                        flow0 = resize_image(flow0, Ly=Ly, Lx=Lx,
-                                            no_channels=flow0.ndim==3, 
-                                            interpolation=cv2.INTER_NEAREST)
+                        flow0 = resize_image(
+                            flow0,
+                            Ly=Ly,
+                            Lx=Lx,
+                            no_channels=flow0.ndim == 3,
+                            interpolation=cv2.INTER_NEAREST,
+                        )
                     if Lz0 != Lz:
-                        flow0 = np.swapaxes(resize_image(np.swapaxes(flow0, 0, 1),
-                                            Ly=Lz, Lx=Lx,
-                                            no_channels=flow0.ndim==3, 
-                                            interpolation=cv2.INTER_NEAREST), 0, 1)
+                        flow0 = np.swapaxes(
+                            resize_image(
+                                np.swapaxes(flow0, 0, 1),
+                                Ly=Lz,
+                                Lx=Lx,
+                                no_channels=flow0.ndim == 3,
+                                interpolation=cv2.INTER_NEAREST,
+                            ),
+                            0,
+                            1,
+                        )
                     self.flows.append(flow0)
 
             # add first axis
@@ -2249,8 +3138,10 @@ class MainW(QMainWindow):
                     self.flows[n][np.newaxis, ...] for n in range(len(self.flows))
                 ]
 
-            self.logger.info("%d cells found with model in %0.3f sec" %
-                             (len(np.unique(masks)[1:]), time.time() - tic))
+            self.logger.info(
+                "%d cells found with model in %0.3f sec"
+                % (len(np.unique(masks)[1:]), time.time() - tic)
+            )
             self.progress.setValue(80)
             z = 0
 
@@ -2258,7 +3149,11 @@ class MainW(QMainWindow):
             self.masksOn = True
             self.MCheckBox.setChecked(True)
             self.progress.setValue(100)
-            if self.restore != "filter" and self.restore is not None and self.autobtn.isChecked():
+            if (
+                self.restore != "filter"
+                and self.restore is not None
+                and self.autobtn.isChecked()
+            ):
                 self.compute_saturation()
             if not do_3D and not stitch_threshold > 0:
                 self.recompute_masks = True

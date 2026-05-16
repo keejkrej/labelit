@@ -2,14 +2,14 @@
 Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer, Michael Rariden and Marius Pachitariu.
 """
 
-import os, time
+import os
+import time
 from pathlib import Path
 import numpy as np
 from tqdm import trange
 import torch
 from scipy.ndimage import gaussian_filter
 import gc
-import cv2
 
 import logging
 

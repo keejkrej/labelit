@@ -1,7 +1,8 @@
 """
 Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer , Michael Rariden and Marius Pachitariu.
 """
-import os, gc
+import os
+import gc
 import numpy as np
 import cv2
 import fastremap
@@ -12,7 +13,6 @@ from ..models import normalize_default, MODEL_DIR, MODEL_LIST_PATH, get_user_mod
 from ..utils import masks_to_outlines, outlines_list
 
 try:
-    import qtpy
     from qtpy.QtWidgets import (
         QDialog,
         QDialogButtonBox,
@@ -28,7 +28,6 @@ except:
     GUI = False
 
 try:
-    import matplotlib.pyplot as plt
     MATPLOTLIB = True
 except:
     MATPLOTLIB = False
@@ -721,8 +720,7 @@ def _save_sets(parent):
     """
     filename = _get_output_filename(parent)
     base = os.path.splitext(filename)[0]
-    flow_threshold = parent.segmentation_settings.flow_threshold
-    cellprob_threshold = parent.segmentation_settings.cellprob_threshold
+    segmentation_params = parent.get_segmentation_parameters()
 
     if parent.NZ > 1:
         dat = {
@@ -743,9 +741,9 @@ def _save_sets(parent):
                 parent.current_model_path
                 if hasattr(parent, "current_model_path") else 0,
             "flow_threshold":
-                flow_threshold,
+                segmentation_params["flow_threshold"],
             "cellprob_threshold":
-                cellprob_threshold,
+                segmentation_params["cellprob_threshold"],
             "normalize_params":
                 parent.get_normalize_params(),
             "restore":
@@ -753,7 +751,7 @@ def _save_sets(parent):
             "ratio":
                 parent.ratio,
             "diameter":
-                parent.segmentation_settings.diameter
+                segmentation_params["diameter"]
         }
         if parent.restore is not None:
             dat["img_restore"] = parent.stack_filtered
@@ -761,12 +759,12 @@ def _save_sets(parent):
         dat = {
             "outlines":
                 parent.outpix.squeeze() if parent.restore is None or
-                not "upsample" in parent.restore else parent.outpix_resize.squeeze(),
+                "upsample" not in parent.restore else parent.outpix_resize.squeeze(),
             "colors":
                 parent.cellcolors[1:],
             "masks":
                 parent.cellpix.squeeze() if parent.restore is None or
-                not "upsample" in parent.restore else parent.cellpix_resize.squeeze(),
+                "upsample" not in parent.restore else parent.cellpix_resize.squeeze(),
             "filename":
                 parent.filename,
             "flows":
@@ -779,9 +777,9 @@ def _save_sets(parent):
                 parent.current_model_path
                 if hasattr(parent, "current_model_path") else 0,
             "flow_threshold":
-                flow_threshold,
+                segmentation_params["flow_threshold"],
             "cellprob_threshold":
-                cellprob_threshold,
+                segmentation_params["cellprob_threshold"],
             "normalize_params":
                 parent.get_normalize_params(),
             "restore":
@@ -789,7 +787,7 @@ def _save_sets(parent):
             "ratio":
                 parent.ratio,
             "diameter":
-                parent.segmentation_settings.diameter
+                segmentation_params["diameter"]
         }
         if parent.restore is not None:
             dat["img_restore"] = parent.stack_filtered
