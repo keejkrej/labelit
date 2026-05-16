@@ -12,9 +12,10 @@ import warnings
 
 import cv2
 import numpy as np
-import pyqtgraph as pg
-from qtpy import QtCore, QtGui
-from qtpy.QtWidgets import (
+
+os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
+from PySide6 import QtCore, QtGui
+from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
@@ -32,8 +33,8 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import pyqtgraph as pg
 from pyqtgraph.parametertree import Parameter, ParameterTree
-from superqt import QRangeSlider
 
 from .. import dynamics, models, train, version
 from ..io import get_image_files
@@ -52,18 +53,60 @@ except:
 
 Horizontal = QtCore.Qt.Orientation.Horizontal
 
-class Slider(QRangeSlider):
+class Slider(QWidget):
+    valueChanged = QtCore.Signal()
+
     def __init__(self, parent, name, color):
-        super().__init__(Horizontal)
-        self.setEnabled(False)
-        self.valueChanged.connect(lambda: self.levelChanged(parent))
+        super().__init__(parent)
+        self._scale = 10
+        self._value = [0.0, 99.0]
         self.name = name
 
-        self.setStyleSheet(""" QSlider{
-                             background-color: transparent;
-                             }
-        """)
+        self.setEnabled(False)
+        if parent is not None:
+            self.valueChanged.connect(lambda: self.levelChanged(parent))
+
+        self.lowerSlider = QSlider(Horizontal)
+        self.upperSlider = QSlider(Horizontal)
+        self.lowerSlider.valueChanged.connect(self._update_value)
+        self.upperSlider.valueChanged.connect(self._update_value)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.lowerSlider)
+        layout.addWidget(self.upperSlider)
         self.show()
+
+    def setMinimum(self, value):
+        self.lowerSlider.setMinimum(int(round(value * self._scale)))
+        self.upperSlider.setMinimum(int(round(value * self._scale)))
+
+    def setMaximum(self, value):
+        self.lowerSlider.setMaximum(int(round(value * self._scale)))
+        self.upperSlider.setMaximum(int(round(value * self._scale)))
+
+    def setValue(self, value):
+        self.lowerSlider.blockSignals(True)
+        self.upperSlider.blockSignals(True)
+        self.lowerSlider.setValue(int(round(value[0] * self._scale)))
+        self.upperSlider.setValue(int(round(value[1] * self._scale)))
+        self.lowerSlider.blockSignals(False)
+        self.upperSlider.blockSignals(False)
+        self._update_value(emit=False)
+
+    def value(self):
+        return self._value
+
+    def _update_value(self, emit=True):
+        self._value = sorted(
+            [
+                self.lowerSlider.value() / self._scale,
+                self.upperSlider.value() / self._scale,
+            ]
+        )
+        if emit:
+            self.valueChanged.emit()
 
     def levelChanged(self, parent):
         parent.level_change(self.name)
@@ -140,7 +183,7 @@ def run(image=None):
     app.setWindowIcon(app_icon)
     app.setStyle("Fusion")
     MainW(image=image, logger=logger)
-    ret = app.exec_()
+    ret = app.exec()
     sys.exit(ret)
 
 
@@ -163,8 +206,6 @@ class MainW(QMainWindow):
         app_icon.addFile(icon_path, QtCore.QSize(64, 64))
         app_icon.addFile(icon_path, QtCore.QSize(256, 256))
         self.setWindowIcon(app_icon)
-        # rgb(150,255,150)
-        self.setStyleSheet(guiparts.stylesheet())
 
         menus.mainmenu(self)
         menus.editmenu(self)
@@ -316,6 +357,10 @@ class MainW(QMainWindow):
         self.ViewDropDown.currentIndexChanged.connect(self.update_plot)
         self.satBoxV.addWidget(self.ViewDropDown)
 
+        self.norm3DCheckBox = QCheckBox("norm3D")
+        self.norm3DCheckBox.setChecked(True)
+        self.satBoxV.addWidget(self.norm3DCheckBox)
+
         self.autoSaturationButton = QPushButton("auto saturation")
         self.autoSaturationButton.setEnabled(False)
         self.autoSaturationButton.clicked.connect(self.compute_saturation)
@@ -324,7 +369,6 @@ class MainW(QMainWindow):
         self.sliders = []
         gray_slider_layout = QHBoxLayout()
         label = QLabel("gray:")
-        label.setStyleSheet("color: gray")
         gray_slider_layout.addWidget(label)
         self.sliders.append(Slider(self, "gray", [100, 100, 100]))
         self.sliders[-1].setMinimum(-0.1)
@@ -375,7 +419,6 @@ class MainW(QMainWindow):
 
         # buttons for deleting multiple cells
         self.deleteBox = QGroupBox("delete multiple ROIs")
-        self.deleteBox.setStyleSheet("color: rgb(200, 200, 200)")
         self.deleteBoxG = QGridLayout()
         self.deleteBox.setLayout(self.deleteBoxG)
         self.drawBoxG.addWidget(self.deleteBox, 0, 5, 4, 4)
@@ -551,7 +594,6 @@ class MainW(QMainWindow):
                     "value": 0.0,
                     "step": 1.0,
                 },
-                {"name": "norm3D", "type": "bool", "value": True},
             ],
         )
         self.preprocessing_params_tree = ParameterTree(showHeader=False)
@@ -625,7 +667,7 @@ class MainW(QMainWindow):
             "smooth_radius": smooth_radius,
             "tile_norm_blocksize": tile_norm_blocksize,
             "tile_norm_smooth3D": tile_norm_smooth3D,
-            "norm3D": bool(self.preprocessing_param_root.param("norm3D").value()),
+            "norm3D": self.norm3DCheckBox.isChecked(),
             "invert": False,
         }
 
@@ -642,7 +684,7 @@ class MainW(QMainWindow):
         self.preprocessing_param_root.param("tile_norm_smooth3D").setValue(
             params["tile_norm_smooth3D"]
         )
-        self.preprocessing_param_root.param("norm3D").setValue(params["norm3D"])
+        self.norm3DCheckBox.setChecked(bool(params["norm3D"]))
 
     def level_change(self, r):
         if self.loaded:
@@ -1928,7 +1970,7 @@ class MainW(QMainWindow):
 
         # train model
         TW = guiparts.TrainWindow(self, models.MODEL_NAMES)
-        train = TW.exec_()
+        train = TW.exec()
         if train:
             train_data_folder = self.training_params.get("train_data_folder", "")
             if not train_data_folder:

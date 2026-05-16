@@ -1,7 +1,7 @@
 """
 Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer , Michael Rariden and Marius Pachitariu.
 """
-from qtpy.QtWidgets import QAction
+from PySide6.QtGui import QAction
 from . import io
 
 

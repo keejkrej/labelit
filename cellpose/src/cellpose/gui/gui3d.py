@@ -4,8 +4,8 @@
 
 # import sys, pathlib, warnings
 
-# from qtpy import QtGui, QtCore
-# from qtpy.QtWidgets import QApplication, QScrollBar, QCheckBox, QLabel, QLineEdit
+# from PySide6 import QtGui, QtCore
+# from PySide6.QtWidgets import QApplication, QScrollBar, QCheckBox, QLabel, QLineEdit
 # import pyqtgraph as pg
 
 # import numpy as np
@@ -94,7 +94,7 @@
 #     app.setWindowIcon(app_icon)
 #     app.setStyle("Fusion")
 #     MainW_3d(image=image, logger=logger)
-#     ret = app.exec_()
+#     ret = app.exec()
 #     sys.exit(ret)
 
 

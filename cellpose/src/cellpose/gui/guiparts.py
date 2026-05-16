@@ -4,9 +4,10 @@ Copyright © 2025 Howard Hughes Medical Institute, Authored by Carsen Stringer ,
 
 import os
 import numpy as np
-import pyqtgraph as pg
-from qtpy import QtCore, QtGui
-from qtpy.QtWidgets import (
+
+os.environ.setdefault("PYQTGRAPH_QT_LIB", "PySide6")
+from PySide6 import QtCore, QtGui
+from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
     QComboBox,
@@ -24,6 +25,7 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+import pyqtgraph as pg
 
 from . import io as gui_io
 

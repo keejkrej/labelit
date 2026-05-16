@@ -13,7 +13,7 @@ from ..models import normalize_default, MODEL_DIR, MODEL_LIST_PATH, get_user_mod
 from ..utils import masks_to_outlines, outlines_list
 
 try:
-    from qtpy.QtWidgets import (
+    from PySide6.QtWidgets import (
         QDialog,
         QDialogButtonBox,
         QFileDialog,
@@ -193,7 +193,7 @@ def _prompt_series_templates(parent, folder):
     button_box.rejected.connect(dialog.reject)
     layout.addWidget(button_box)
 
-    if dialog.exec_() != QDialog.Accepted:
+    if dialog.exec() != QDialog.Accepted:
         return None
 
     return subfolder_edit.text().strip(), filename_edit.text().strip()
