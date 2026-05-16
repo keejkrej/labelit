@@ -52,7 +52,6 @@ except:
 
 Horizontal = QtCore.Qt.Orientation.Horizontal
 
-
 class Slider(QRangeSlider):
     def __init__(self, parent, name, color):
         super().__init__(Horizontal)
@@ -973,6 +972,7 @@ class MainW(QMainWindow):
         menus.helpmenu(self)
 
         self.loaded = False
+        self.recompute_masks = False
 
         # ---- MAIN WIDGET LAYOUT ---- #
         self.cwidget = QWidget(self)
@@ -2961,7 +2961,7 @@ class MainW(QMainWindow):
         return io._get_train_set(image_names)
 
     def compute_cprob(self):
-        if self.recompute_masks:
+        if getattr(self, "recompute_masks", False):
             segmentation_params = self.get_segmentation_parameters()
             min_size = (
                 int(self.min_size.text())
