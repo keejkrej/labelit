@@ -106,801 +106,10 @@ def make_bwr():
     return bwr
 
 
-def make_spectral():
-    # make spectral colormap
-    r = np.array(
-        [
-            0,
-            4,
-            8,
-            12,
-            16,
-            20,
-            24,
-            28,
-            32,
-            36,
-            40,
-            44,
-            48,
-            52,
-            56,
-            60,
-            64,
-            68,
-            72,
-            76,
-            80,
-            84,
-            88,
-            92,
-            96,
-            100,
-            104,
-            108,
-            112,
-            116,
-            120,
-            124,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            128,
-            120,
-            112,
-            104,
-            96,
-            88,
-            80,
-            72,
-            64,
-            56,
-            48,
-            40,
-            32,
-            24,
-            16,
-            8,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            3,
-            7,
-            11,
-            15,
-            19,
-            23,
-            27,
-            31,
-            35,
-            39,
-            43,
-            47,
-            51,
-            55,
-            59,
-            63,
-            67,
-            71,
-            75,
-            79,
-            83,
-            87,
-            91,
-            95,
-            99,
-            103,
-            107,
-            111,
-            115,
-            119,
-            123,
-            127,
-            131,
-            135,
-            139,
-            143,
-            147,
-            151,
-            155,
-            159,
-            163,
-            167,
-            171,
-            175,
-            179,
-            183,
-            187,
-            191,
-            195,
-            199,
-            203,
-            207,
-            211,
-            215,
-            219,
-            223,
-            227,
-            231,
-            235,
-            239,
-            243,
-            247,
-            251,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-        ]
-    )
-    g = np.array(
-        [
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            9,
-            9,
-            8,
-            8,
-            7,
-            7,
-            6,
-            6,
-            5,
-            5,
-            5,
-            4,
-            4,
-            3,
-            3,
-            2,
-            2,
-            1,
-            1,
-            0,
-            0,
-            0,
-            7,
-            15,
-            23,
-            31,
-            39,
-            47,
-            55,
-            63,
-            71,
-            79,
-            87,
-            95,
-            103,
-            111,
-            119,
-            127,
-            135,
-            143,
-            151,
-            159,
-            167,
-            175,
-            183,
-            191,
-            199,
-            207,
-            215,
-            223,
-            231,
-            239,
-            247,
-            255,
-            247,
-            239,
-            231,
-            223,
-            215,
-            207,
-            199,
-            191,
-            183,
-            175,
-            167,
-            159,
-            151,
-            143,
-            135,
-            128,
-            129,
-            131,
-            132,
-            134,
-            135,
-            137,
-            139,
-            140,
-            142,
-            143,
-            145,
-            147,
-            148,
-            150,
-            151,
-            153,
-            154,
-            156,
-            158,
-            159,
-            161,
-            162,
-            164,
-            166,
-            167,
-            169,
-            170,
-            172,
-            174,
-            175,
-            177,
-            178,
-            180,
-            181,
-            183,
-            185,
-            186,
-            188,
-            189,
-            191,
-            193,
-            194,
-            196,
-            197,
-            199,
-            201,
-            202,
-            204,
-            205,
-            207,
-            208,
-            210,
-            212,
-            213,
-            215,
-            216,
-            218,
-            220,
-            221,
-            223,
-            224,
-            226,
-            228,
-            229,
-            231,
-            232,
-            234,
-            235,
-            237,
-            239,
-            240,
-            242,
-            243,
-            245,
-            247,
-            248,
-            250,
-            251,
-            253,
-            255,
-            251,
-            247,
-            243,
-            239,
-            235,
-            231,
-            227,
-            223,
-            219,
-            215,
-            211,
-            207,
-            203,
-            199,
-            195,
-            191,
-            187,
-            183,
-            179,
-            175,
-            171,
-            167,
-            163,
-            159,
-            155,
-            151,
-            147,
-            143,
-            139,
-            135,
-            131,
-            127,
-            123,
-            119,
-            115,
-            111,
-            107,
-            103,
-            99,
-            95,
-            91,
-            87,
-            83,
-            79,
-            75,
-            71,
-            67,
-            63,
-            59,
-            55,
-            51,
-            47,
-            43,
-            39,
-            35,
-            31,
-            27,
-            23,
-            19,
-            15,
-            11,
-            7,
-            3,
-            0,
-            8,
-            16,
-            24,
-            32,
-            41,
-            49,
-            57,
-            65,
-            74,
-            82,
-            90,
-            98,
-            106,
-            115,
-            123,
-            131,
-            139,
-            148,
-            156,
-            164,
-            172,
-            180,
-            189,
-            197,
-            205,
-            213,
-            222,
-            230,
-            238,
-            246,
-            254,
-        ]
-    )
-    b = np.array(
-        [
-            0,
-            7,
-            15,
-            23,
-            31,
-            39,
-            47,
-            55,
-            63,
-            71,
-            79,
-            87,
-            95,
-            103,
-            111,
-            119,
-            127,
-            135,
-            143,
-            151,
-            159,
-            167,
-            175,
-            183,
-            191,
-            199,
-            207,
-            215,
-            223,
-            231,
-            239,
-            247,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            255,
-            251,
-            247,
-            243,
-            239,
-            235,
-            231,
-            227,
-            223,
-            219,
-            215,
-            211,
-            207,
-            203,
-            199,
-            195,
-            191,
-            187,
-            183,
-            179,
-            175,
-            171,
-            167,
-            163,
-            159,
-            155,
-            151,
-            147,
-            143,
-            139,
-            135,
-            131,
-            128,
-            126,
-            124,
-            122,
-            120,
-            118,
-            116,
-            114,
-            112,
-            110,
-            108,
-            106,
-            104,
-            102,
-            100,
-            98,
-            96,
-            94,
-            92,
-            90,
-            88,
-            86,
-            84,
-            82,
-            80,
-            78,
-            76,
-            74,
-            72,
-            70,
-            68,
-            66,
-            64,
-            62,
-            60,
-            58,
-            56,
-            54,
-            52,
-            50,
-            48,
-            46,
-            44,
-            42,
-            40,
-            38,
-            36,
-            34,
-            32,
-            30,
-            28,
-            26,
-            24,
-            22,
-            20,
-            18,
-            16,
-            14,
-            12,
-            10,
-            8,
-            6,
-            4,
-            2,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            8,
-            16,
-            24,
-            32,
-            41,
-            49,
-            57,
-            65,
-            74,
-            82,
-            90,
-            98,
-            106,
-            115,
-            123,
-            131,
-            139,
-            148,
-            156,
-            164,
-            172,
-            180,
-            189,
-            197,
-            205,
-            213,
-            222,
-            230,
-            238,
-            246,
-            254,
-        ]
-    )
-    color = (np.vstack((r, g, b)).T).astype(np.uint8)
-    spectral = pg.ColorMap(pos=np.linspace(0.0, 255, 256), color=color)
-    return spectral
-
-
-def make_cmap(cm=0):
-    # make a single channel colormap
-    r = np.arange(0, 256)
-    color = np.zeros((256, 3))
-    color[:, cm] = r
-    color = color.astype(np.uint8)
-    cmap = pg.ColorMap(pos=np.linspace(0.0, 255, 256), color=color)
-    return cmap
+def as_gray_image(image):
+    if image.ndim > 2:
+        return image[..., 0]
+    return image
 
 
 def run(image=None):
@@ -911,7 +120,6 @@ def run(image=None):
     warnings.filterwarnings("ignore")
     app = QApplication(sys.argv)
     icon_path = pathlib.Path.home().joinpath(".cellpose", "logo.png")
-    guip_path = pathlib.Path.home().joinpath(".cellpose", "cellposeSAM_gui.png")
     if not icon_path.is_file():
         cp_dir = pathlib.Path.home().joinpath(".cellpose")
         cp_dir.mkdir(exist_ok=True)
@@ -919,13 +127,6 @@ def run(image=None):
         download_url_to_file(
             "https://www.cellpose.org/static/images/cellpose_transparent.png",
             icon_path,
-            progress=True,
-        )
-    if not guip_path.is_file():
-        print("downloading help window image")
-        download_url_to_file(
-            "https://www.cellpose.org/static/images/cellposeSAM_gui.png",
-            guip_path,
             progress=True,
         )
     icon_path = str(icon_path.resolve())
@@ -938,7 +139,6 @@ def run(image=None):
     app_icon.addFile(icon_path, QtCore.QSize(256, 256))
     app.setWindowIcon(app_icon)
     app.setStyle("Fusion")
-    app.setPalette(guiparts.DarkPalette())
     MainW(image=image, logger=logger)
     ret = app.exec_()
     sys.exit(ret)
@@ -969,7 +169,6 @@ class MainW(QMainWindow):
         menus.mainmenu(self)
         menus.editmenu(self)
         menus.modelmenu(self)
-        menus.helpmenu(self)
 
         self.loaded = False
         self.recompute_masks = False
@@ -1001,17 +200,6 @@ class MainW(QMainWindow):
         self.make_viewbox()
         bwrmap = make_bwr()
         self.bwr = bwrmap.getLookupTable(start=0.0, stop=255.0, alpha=False)
-        self.cmap = []
-        # spectral colormap
-        self.cmap.append(
-            make_spectral().getLookupTable(start=0.0, stop=255.0, alpha=False)
-        )
-        # single channel colormaps
-        for i in range(3):
-            self.cmap.append(
-                make_cmap(i).getLookupTable(start=0.0, stop=255.0, alpha=False)
-            )
-
         if MATPLOTLIB:
             self.colormap = (
                 plt.get_cmap("gist_ncar")(np.linspace(0.0, 0.9, 1000000)) * 255
@@ -1033,9 +221,6 @@ class MainW(QMainWindow):
         self.last_series_subfolder_template = ""
         self.last_series_filename_template = ""
         self.reset()
-
-        # This needs to go after .reset() is called to get state fully set up:
-        self.autobtn.checkStateChanged.connect(self.compute_saturation_if_checked)
 
         self.load_3D = False
 
@@ -1064,18 +249,6 @@ class MainW(QMainWindow):
         self.setAcceptDrops(True)
         self.win.show()
         self.show()
-
-    def help_window(self):
-        HW = guiparts.HelpWindow(self)
-        HW.show()
-
-    def train_help_window(self):
-        THW = guiparts.TrainHelpWindow(self)
-        THW.show()
-
-    def gui_window(self):
-        EG = guiparts.ExampleGUI(self)
-        EG.show()
 
     def make_buttons(self):
         b = 0
@@ -1132,61 +305,33 @@ class MainW(QMainWindow):
 
         b += 1
         self.satBox = QGroupBox("Views")
-        self.satBoxG = QGridLayout()
-        self.satBox.setLayout(self.satBoxG)
+        self.satBoxV = QVBoxLayout()
+        self.satBox.setLayout(self.satBoxV)
         self.left_sidebar.addWidget(self.satBox, b, 0, 1, 9)
 
-        widget_row = 0
-        self.view = 0  # 0=image, 1=flowsXY, 2=flowsZ, 3=cellprob
-        self.color = 0  # 0=RGB, 1=gray, 2=R, 3=G, 4=B
-        self.RGBDropDown = QComboBox()
-        self.RGBDropDown.addItems(
-            ["RGB", "red=R", "green=G", "blue=B", "gray", "spectral"]
-        )
-        self.RGBDropDown.currentIndexChanged.connect(self.color_choose)
-        self.satBoxG.addWidget(self.RGBDropDown, widget_row, 0, 1, 3)
-
-        label = QLabel("<p>[&uarr; / &darr; or W/S]</p>")
-        self.satBoxG.addWidget(label, widget_row, 3, 1, 3)
-        label = QLabel("[R / G / B \n toggles color ]")
-        self.satBoxG.addWidget(label, widget_row, 6, 1, 3)
-
-        widget_row += 1
+        self.view = 0  # 0=image, 1=gradXY, 2=cellprob, 3=restored
         self.ViewDropDown = QComboBox()
         self.ViewDropDown.addItems(["image", "gradXY", "cellprob", "restored"])
         self.ViewDropDown.model().item(3).setEnabled(False)
         self.ViewDropDown.currentIndexChanged.connect(self.update_plot)
-        self.satBoxG.addWidget(self.ViewDropDown, widget_row, 0, 2, 3)
+        self.satBoxV.addWidget(self.ViewDropDown)
 
-        label = QLabel("[pageup / pagedown]")
-        self.satBoxG.addWidget(label, widget_row, 3, 1, 5)
+        self.autoSaturationButton = QPushButton("auto saturation")
+        self.autoSaturationButton.setEnabled(False)
+        self.autoSaturationButton.clicked.connect(self.compute_saturation)
+        self.satBoxV.addWidget(self.autoSaturationButton)
 
-        widget_row += 2
-        label = QLabel("")
-        self.satBoxG.addWidget(label, widget_row, 0, 1, 5)
-
-        self.autobtn = QCheckBox("auto-adjust saturation")
-        self.autobtn.setChecked(True)
-        self.satBoxG.addWidget(self.autobtn, widget_row, 1, 1, 8)
-
-        widget_row += 1
         self.sliders = []
-        colors = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [100, 100, 100]]
-        colornames = ["red", "Chartreuse", "DodgerBlue"]
-        names = ["red", "green", "blue"]
-        for r in range(3):
-            widget_row += 1
-            if r == 0:
-                label = QLabel('<font color="gray">gray/</font><br>red')
-            else:
-                label = QLabel(names[r] + ":")
-            label.setStyleSheet(f"color: {colornames[r]}")
-            self.satBoxG.addWidget(label, widget_row, 0, 1, 2)
-            self.sliders.append(Slider(self, names[r], colors[r]))
-            self.sliders[-1].setMinimum(-0.1)
-            self.sliders[-1].setMaximum(255.1)
-            self.sliders[-1].setValue([0, 255])
-            self.satBoxG.addWidget(self.sliders[-1], widget_row, 2, 1, 7)
+        gray_slider_layout = QHBoxLayout()
+        label = QLabel("gray:")
+        label.setStyleSheet("color: gray")
+        gray_slider_layout.addWidget(label)
+        self.sliders.append(Slider(self, "gray", [100, 100, 100]))
+        self.sliders[-1].setMinimum(-0.1)
+        self.sliders[-1].setMaximum(255.1)
+        self.sliders[-1].setValue([0, 255])
+        gray_slider_layout.addWidget(self.sliders[-1], 1)
+        self.satBoxV.addLayout(gray_slider_layout)
 
         b += 1
         self.drawBox = QGroupBox("Drawing")
@@ -1500,14 +645,9 @@ class MainW(QMainWindow):
         self.preprocessing_param_root.param("norm3D").setValue(params["norm3D"])
 
     def level_change(self, r):
-        r = ["red", "green", "blue"].index(r)
         if self.loaded:
-            sval = self.sliders[r].value()
-            self.saturation[r][self.currentZ] = sval
-            if not self.autobtn.isChecked():
-                for r in range(3):
-                    for i in range(len(self.saturation[r])):
-                        self.saturation[r][i] = self.saturation[r][self.currentZ]
+            sval = self.sliders[0].value()
+            self.saturation[0][self.currentZ] = sval
             self.update_plot()
 
     def keyPressEvent(self, event):
@@ -1553,34 +693,8 @@ class MainW(QMainWindow):
                         self.view = (self.view - 1) % (nviews)
                         self.ViewDropDown.setCurrentIndex(self.view)
 
-                # can change background or stroke size if cell not finished
-                if event.key() == QtCore.Qt.Key_Up or event.key() == QtCore.Qt.Key_W:
-                    self.color = (self.color - 1) % (6)
-                    self.RGBDropDown.setCurrentIndex(self.color)
-                elif (
-                    event.key() == QtCore.Qt.Key_Down or event.key() == QtCore.Qt.Key_S
-                ):
-                    self.color = (self.color + 1) % (6)
-                    self.RGBDropDown.setCurrentIndex(self.color)
-                elif event.key() == QtCore.Qt.Key_R:
-                    if self.color != 1:
-                        self.color = 1
-                    else:
-                        self.color = 0
-                    self.RGBDropDown.setCurrentIndex(self.color)
-                elif event.key() == QtCore.Qt.Key_G:
-                    if self.color != 2:
-                        self.color = 2
-                    else:
-                        self.color = 0
-                    self.RGBDropDown.setCurrentIndex(self.color)
-                elif event.key() == QtCore.Qt.Key_B:
-                    if self.color != 3:
-                        self.color = 3
-                    else:
-                        self.color = 0
-                    self.RGBDropDown.setCurrentIndex(self.color)
-                elif (
+                # can change stroke size if cell not finished
+                if (
                     event.key() == QtCore.Qt.Key_Comma
                     or event.key() == QtCore.Qt.Key_Period
                 ):
@@ -1626,7 +740,7 @@ class MainW(QMainWindow):
             print("GUI_ERROR: no filtering settings on (use custom filter settings)")
             self.restore = None
             return
-        self.compute_saturation()
+        self.compute_saturation(apply_preprocessing=True)
 
     def model_choose(self, custom=False):
         if custom:
@@ -1657,14 +771,12 @@ class MainW(QMainWindow):
 
         self.reset_filter_button.setEnabled(not self.load_3D)
         self.apply_filter_button.setEnabled(True)
+        self.autoSaturationButton.setEnabled(True)
 
         self.newmodel.setEnabled(True)
         self.loadMasks.setEnabled(True)
 
-        for n in range(self.nchan):
-            self.sliders[n].setEnabled(True)
-        for n in range(self.nchan, 3):
-            self.sliders[n].setEnabled(True)
+        self.sliders[0].setEnabled(True)
 
         self.toggle_mask_ops()
 
@@ -1971,15 +1083,11 @@ class MainW(QMainWindow):
         self.opacity = 128  # how opaque masks should be
         self.outcolor = [200, 200, 255, 200]
         self.NZ, self.Ly, self.Lx = 1, 256, 256
-        self.saturation = self.saturation if hasattr(self, "saturation") else []
+        self.saturation = [[[0, 255] for n in range(self.NZ)]]
 
-        # only adjust the saturation if auto-adjust is on:
-        if self.autobtn.isChecked():
-            for r in range(3):
-                self.saturation.append([[0, 255] for n in range(self.NZ)])
-                self.sliders[r].setValue([0, 255])
-                self.sliders[r].setEnabled(False)
-                self.sliders[r].show()
+        self.sliders[0].setValue([0, 255])
+        self.sliders[0].setEnabled(False)
+        self.sliders[0].show()
         self.currentZ = 0
         self.flows = [[], [], [], [], [[]]]
         # masks matrix
@@ -1994,8 +1102,6 @@ class MainW(QMainWindow):
         self.ismanual = np.zeros(0, "bool")
 
         # -- set menus to default -- #
-        self.color = 0
-        self.RGBDropDown.setCurrentIndex(self.color)
         self.view = 0
         self.ViewDropDown.setCurrentIndex(0)
         self.ViewDropDown.model().item(self.ViewDropDown.count() - 1).setEnabled(False)
@@ -2013,6 +1119,7 @@ class MainW(QMainWindow):
         self.removing_cells_list = []
         self.removing_region = False
         self.remove_roi_obj = None
+        self.autoSaturationButton.setEnabled(False)
 
     def delete_restore(self):
         """delete restored imgs but don't reset settings"""
@@ -2372,12 +1479,6 @@ class MainW(QMainWindow):
     def mouse_moved(self, pos):
         items = self.win.scene().items(pos)
 
-    def color_choose(self):
-        self.color = self.RGBDropDown.currentIndex()
-        self.view = 0
-        self.ViewDropDown.setCurrentIndex(self.view)
-        self.update_plot()
-
     def update_plot(self):
         self.view = self.ViewDropDown.currentIndex()
         self.Ly, self.Lx, _ = self.stack[self.currentZ].shape
@@ -2388,58 +1489,24 @@ class MainW(QMainWindow):
                 if self.view == 0
                 else self.stack_filtered[self.currentZ]
             )
-            if self.color == 0:
-                self.img.setImage(image, autoLevels=False, lut=None)
-                if self.nchan > 1:
-                    levels = np.array(
-                        [
-                            self.saturation[0][self.currentZ],
-                            self.saturation[1][self.currentZ],
-                            self.saturation[2][self.currentZ],
-                        ]
-                    )
-                    self.img.setLevels(levels)
-                else:
-                    self.img.setLevels(self.saturation[0][self.currentZ])
-            elif self.color > 0 and self.color < 4:
-                if self.nchan > 1:
-                    image = image[:, :, self.color - 1]
-                self.img.setImage(image, autoLevels=False, lut=self.cmap[self.color])
-                if self.nchan > 1:
-                    self.img.setLevels(self.saturation[self.color - 1][self.currentZ])
-                else:
-                    self.img.setLevels(self.saturation[0][self.currentZ])
-            elif self.color == 4:
-                if self.nchan > 1:
-                    # exclude channels with no data:
-                    ranges = np.ptp(image, tuple(range(image.ndim - 1)))
-                    range_mask = ranges > 1e-5
-                    image = image[..., range_mask]
-                    image = image.mean(axis=-1)
-                self.img.setImage(image, autoLevels=False, lut=None)
-                self.img.setLevels(self.saturation[0][self.currentZ])
-            elif self.color == 5:
-                if self.nchan > 1:
-                    image = image.mean(axis=-1)
-                self.img.setImage(image, autoLevels=False, lut=self.cmap[0])
-                self.img.setLevels(self.saturation[0][self.currentZ])
+            self.img.setImage(as_gray_image(image), autoLevels=False, lut=None)
+            self.img.setLevels(self.saturation[0][self.currentZ])
         else:
             image = np.zeros((self.Ly, self.Lx), np.uint8)
             if len(self.flows) >= self.view - 1 and len(self.flows[self.view - 1]) > 0:
                 image = self.flows[self.view - 1][self.currentZ]
             if self.view > 1:
-                self.img.setImage(image, autoLevels=False, lut=self.bwr)
+                self.img.setImage(as_gray_image(image), autoLevels=False, lut=self.bwr)
             else:
-                self.img.setImage(image, autoLevels=False, lut=None)
+                self.img.setImage(as_gray_image(image), autoLevels=False, lut=None)
             self.img.setLevels([0.0, 255.0])
 
-        for r in range(3):
-            self.sliders[r].setValue(
-                [
-                    self.saturation[r][self.currentZ][0],
-                    self.saturation[r][self.currentZ][1],
-                ]
-            )
+        self.sliders[0].setValue(
+            [
+                self.saturation[0][self.currentZ][0],
+                self.saturation[0][self.currentZ][1],
+            ]
+        )
         self.win.show()
         self.show()
 
@@ -2695,11 +1762,7 @@ class MainW(QMainWindow):
             **preprocessing_params,
         }
 
-    def compute_saturation_if_checked(self):
-        if self.autobtn.isChecked():
-            self.compute_saturation()
-
-    def compute_saturation(self, return_img=False):
+    def compute_saturation(self, apply_preprocessing=False):
         norm = self.get_normalize_params()
         print(norm)
         sharpen, smooth = norm["sharpen_radius"], norm["smooth_radius"]
@@ -2710,12 +1773,23 @@ class MainW(QMainWindow):
         smooth3D = norm["tile_norm_smooth3D"]
         tile_norm = norm["tile_norm_blocksize"]
 
-        if sharpen > 0 or smooth > 0 or tile_norm > 0:
+        should_apply_preprocessing = (
+            apply_preprocessing and (sharpen > 0 or smooth > 0 or tile_norm > 0)
+        )
+
+        if should_apply_preprocessing:
             img_norm = self.stack.copy()
         else:
-            img_norm = self.stack
+            restored_view_index = self.ViewDropDown.count() - 1
+            if (
+                self.ViewDropDown.currentIndex() == restored_view_index
+                and hasattr(self, "stack_filtered")
+            ):
+                img_norm = self.stack_filtered
+            else:
+                img_norm = self.stack
 
-        if sharpen > 0 or smooth > 0 or tile_norm > 0:
+        if should_apply_preprocessing:
             self.restore = "filter"
             print(
                 "GUI_INFO: computing filtered image because sharpen > 0 or tile_norm > 0"
@@ -2751,50 +1825,31 @@ class MainW(QMainWindow):
                 True
             )
             self.ViewDropDown.setCurrentIndex(self.ViewDropDown.count() - 1)
-        else:
-            img_norm = (
-                self.stack
-                if self.restore is None or self.restore == "filter"
-                else self.stack_filtered
-            )
-
-        if self.autobtn.isChecked():
-            self.saturation = []
-            for c in range(img_norm.shape[-1]):
-                self.saturation.append([])
-                if np.ptp(img_norm[..., c]) > 1e-3:
-                    if norm3D:
-                        x01 = np.percentile(img_norm[..., c], percentile[0])
-                        x99 = np.percentile(img_norm[..., c], percentile[1])
-                        if invert:
-                            x01i = 255.0 - x99
-                            x99i = 255.0 - x01
-                            x01, x99 = x01i, x99i
-                        for n in range(self.NZ):
-                            self.saturation[-1].append([x01, x99])
+        img_gray = as_gray_image(img_norm)
+        self.saturation = [[]]
+        if np.ptp(img_gray) > 1e-3:
+            if norm3D:
+                x01 = np.percentile(img_gray, percentile[0])
+                x99 = np.percentile(img_gray, percentile[1])
+                if invert:
+                    x01, x99 = 255.0 - x99, 255.0 - x01
+                for n in range(self.NZ):
+                    self.saturation[0].append([x01, x99])
+            else:
+                for z in range(self.NZ):
+                    if self.NZ > 1:
+                        plane = img_gray[z]
                     else:
-                        for z in range(self.NZ):
-                            if self.NZ > 1:
-                                x01 = np.percentile(img_norm[z, :, :, c], percentile[0])
-                                x99 = np.percentile(img_norm[z, :, :, c], percentile[1])
-                            else:
-                                x01 = np.percentile(img_norm[..., c], percentile[0])
-                                x99 = np.percentile(img_norm[..., c], percentile[1])
-                            if invert:
-                                x01i = 255.0 - x99
-                                x99i = 255.0 - x01
-                                x01, x99 = x01i, x99i
-                            self.saturation[-1].append([x01, x99])
-                else:
-                    for n in range(self.NZ):
-                        self.saturation[-1].append([0, 255.0])
-            print(self.saturation[2][self.currentZ])
+                        plane = img_gray
+                    x01 = np.percentile(plane, percentile[0])
+                    x99 = np.percentile(plane, percentile[1])
+                    if invert:
+                        x01, x99 = 255.0 - x99, 255.0 - x01
+                    self.saturation[0].append([x01, x99])
+        else:
+            for n in range(self.NZ):
+                self.saturation[0].append([0, 255.0])
 
-            if img_norm.shape[-1] == 1:
-                self.saturation.append(self.saturation[0])
-                self.saturation.append(self.saturation[0])
-
-        # self.autobtn.setChecked(True)
         self.update_plot()
 
     def get_model_path(self, custom=False):
@@ -3149,12 +2204,6 @@ class MainW(QMainWindow):
             self.masksOn = True
             self.MCheckBox.setChecked(True)
             self.progress.setValue(100)
-            if (
-                self.restore != "filter"
-                and self.restore is not None
-                and self.autobtn.isChecked()
-            ):
-                self.compute_saturation()
             if not do_3D and not stitch_threshold > 0:
                 self.recompute_masks = True
             else:

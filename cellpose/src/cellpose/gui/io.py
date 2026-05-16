@@ -298,12 +298,6 @@ def _load_image(parent, filename=None, load_seg=True, load_3D=False):
         if load_mask:
             _load_masks(parent, filename=mask_file)
 
-    # check if gray and adjust viewer:
-    if len(np.unique(image[..., 1:])) == 1:
-        parent.color = 4
-        parent.RGBDropDown.setCurrentIndex(4) # gray
-        parent.update_plot()
-
         
 def _initialize_images(parent, image, load_3D=False):
     """ format image for GUI
@@ -348,24 +342,13 @@ def _initialize_images(parent, image, load_3D=False):
     else:
         parent.Lyr, parent.Lxr = parent.Ly, parent.Lx
     parent.clear_all()
+    parent.saturation = [[[0, 255] for n in range(parent.NZ)]]
+    parent.sliders[0].setValue([0, 255])
 
     if not hasattr(parent, "stack_filtered") and parent.restore:
         print("GUI_INFO: no 'img_restore' found, applying current settings")
         parent.compute_restore()
 
-    if parent.autobtn.isChecked():
-        if parent.restore is None or parent.restore != "filter":
-            print(
-                "GUI_INFO: normalization checked: computing saturation levels (and optionally filtered image)"
-            )
-            parent.compute_saturation()
-    # elif len(parent.saturation) != parent.NZ:
-    #     parent.saturation = []
-    #     for r in range(3):
-    #         parent.saturation.append([])
-    #         for n in range(parent.NZ):
-    #             parent.saturation[-1].append([0, 255])
-    #         parent.sliders[r].setValue([0, 255])
     parent.compute_scale()
     parent.track_changes = []
 
@@ -497,10 +480,6 @@ def _load_seg(parent, filename=None, image=None, image_file=None, load_3D=False)
     if "ismanual" in dat:
         if len(dat["ismanual"]) == parent.ncells:
             parent.ismanual = dat["ismanual"]
-
-    if "current_channel" in dat:
-        parent.color = (dat["current_channel"] + 2) % 5
-        parent.RGBDropDown.setCurrentIndex(parent.color)
 
     if "flows" in dat:
         parent.flows = dat["flows"]
@@ -730,7 +709,6 @@ def _save_sets(parent):
                 parent.cellcolors[1:],
             "masks":
                 parent.cellpix,
-            "current_channel": (parent.color - 2) % 5,
             "filename":
                 parent.filename,
             "flows":

@@ -75,7 +75,6 @@
 #     warnings.filterwarnings("ignore")
 #     app = QApplication(sys.argv)
 #     icon_path = pathlib.Path.home().joinpath(".cellpose", "logo.png")
-#     guip_path = pathlib.Path.home().joinpath(".cellpose", "cellpose_gui.png")
 #     style_path = pathlib.Path.home().joinpath(".cellpose", "style_choice.npy")
 #     if not icon_path.is_file():
 #         cp_dir = pathlib.Path.home().joinpath(".cellpose")
@@ -84,10 +83,6 @@
 #         download_url_to_file(
 #             "https://www.cellpose.org/static/images/cellpose_transparent.png",
 #             icon_path, progress=True)
-#     if not guip_path.is_file():
-#         print("downloading help window image")
-#         download_url_to_file("https://www.cellpose.org/static/images/cellpose_gui.png",
-#                              guip_path, progress=True)
 #     icon_path = str(icon_path.resolve())
 #     app_icon = QtGui.QIcon()
 #     app_icon.addFile(icon_path, QtCore.QSize(16, 16))
@@ -98,7 +93,6 @@
 #     app_icon.addFile(icon_path, QtCore.QSize(256, 256))
 #     app.setWindowIcon(app_icon)
 #     app.setStyle("Fusion")
-#     app.setPalette(guiparts.DarkPalette())
 #     MainW_3d(image=image, logger=logger)
 #     ret = app.exec_()
 #     sys.exit(ret)

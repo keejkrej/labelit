@@ -125,26 +125,3 @@ def modelmenu(parent):
     parent.newmodel.triggered.connect(parent.new_model)
     parent.newmodel.setEnabled(False)
     model_menu.addAction(parent.newmodel)
-
-    openTrainHelp = QAction("Training instructions", parent)
-    openTrainHelp.triggered.connect(parent.train_help_window)
-    model_menu.addAction(openTrainHelp)
-
-
-def helpmenu(parent):
-    main_menu = parent.menuBar()
-    help_menu = main_menu.addMenu("&Help")
-
-    openHelp = QAction("&Help with GUI", parent)
-    openHelp.setShortcut("Ctrl+H")
-    openHelp.triggered.connect(parent.help_window)
-    help_menu.addAction(openHelp)
-
-    openGUI = QAction("&GUI layout", parent)
-    openGUI.setShortcut("Ctrl+G")
-    openGUI.triggered.connect(parent.gui_window)
-    help_menu.addAction(openGUI)
-
-    openTrainHelp = QAction("Training instructions", parent)
-    openTrainHelp.triggered.connect(parent.train_help_window)
-    help_menu.addAction(openTrainHelp)
