@@ -12,7 +12,7 @@
 # from scipy.stats import mode
 # import cv2
 
-# from . import guiparts, io
+# from . import io
 # from ..utils import download_url_to_file, masks_to_outlines
 # from .view import MainW
 

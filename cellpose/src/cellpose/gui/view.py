@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QCompleter,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHeaderView,
@@ -31,7 +30,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QSlider,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -46,8 +44,17 @@ from ..models import normalize_default
 from ..plot import disk
 from ..transforms import normalize99, normalize99_tile, resize_image, smooth_sharpen_img
 from ..utils import download_url_to_file
-from . import guiparts, io, menus, series
-from .viewmodel import MainViewModel
+from . import io, menus, series
+from .dialogs import TrainWindow
+from .viewmodel import MainViewModel, ObservableVariable
+from .widgets import (
+    ImageDraw,
+    SeriesAxisSlider,
+    Slider,
+    ViewBoxNoRightDrag,
+    as_gray_image,
+    make_bwr,
+)
 
 try:
     import matplotlib.pyplot as plt
@@ -55,110 +62,6 @@ try:
     MATPLOTLIB = True
 except:
     MATPLOTLIB = False
-
-Horizontal = QtCore.Qt.Orientation.Horizontal
-
-class Slider(QWidget):
-    valueChanged = QtCore.Signal()
-
-    def __init__(self, parent, name, color):
-        super().__init__(parent)
-        self._scale = 10
-        self._value = [0.0, 99.0]
-        self.name = name
-
-        self.setEnabled(False)
-        if parent is not None:
-            self.valueChanged.connect(lambda: self.levelChanged(parent))
-
-        self.lowerSlider = QSlider(Horizontal)
-        self.upperSlider = QSlider(Horizontal)
-        self.lowerSlider.valueChanged.connect(self._update_value)
-        self.upperSlider.valueChanged.connect(self._update_value)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        layout.addWidget(self.lowerSlider)
-        layout.addWidget(self.upperSlider)
-        self.show()
-
-    def setMinimum(self, value):
-        self.lowerSlider.setMinimum(int(round(value * self._scale)))
-        self.upperSlider.setMinimum(int(round(value * self._scale)))
-
-    def setMaximum(self, value):
-        self.lowerSlider.setMaximum(int(round(value * self._scale)))
-        self.upperSlider.setMaximum(int(round(value * self._scale)))
-
-    def setValue(self, value):
-        self.lowerSlider.blockSignals(True)
-        self.upperSlider.blockSignals(True)
-        self.lowerSlider.setValue(int(round(value[0] * self._scale)))
-        self.upperSlider.setValue(int(round(value[1] * self._scale)))
-        self.lowerSlider.blockSignals(False)
-        self.upperSlider.blockSignals(False)
-        self._update_value(emit=False)
-
-    def value(self):
-        return self._value
-
-    def _update_value(self, emit=True):
-        self._value = sorted(
-            [
-                self.lowerSlider.value() / self._scale,
-                self.upperSlider.value() / self._scale,
-            ]
-        )
-        if emit:
-            self.valueChanged.emit()
-
-    def levelChanged(self, parent):
-        parent.level_change(self.name)
-
-
-class QHLine(QFrame):
-    def __init__(self):
-        super(QHLine, self).__init__()
-        self.setFrameShape(QFrame.HLine)
-        self.setLineWidth(8)
-
-
-class SeriesAxisSlider(QSlider):
-    keyboardRelease = QtCore.Signal()
-
-    def keyReleaseEvent(self, event):
-        super().keyReleaseEvent(event)
-        if event.isAutoRepeat():
-            return
-        if event.key() in [
-            QtCore.Qt.Key_Left,
-            QtCore.Qt.Key_Right,
-            QtCore.Qt.Key_PageUp,
-            QtCore.Qt.Key_PageDown,
-            QtCore.Qt.Key_Home,
-            QtCore.Qt.Key_End,
-        ]:
-            self.keyboardRelease.emit()
-
-
-def make_bwr():
-    # make a bwr colormap
-    b = np.append(255 * np.ones(128), np.linspace(0, 255, 128)[::-1])[:, np.newaxis]
-    r = np.append(np.linspace(0, 255, 128), 255 * np.ones(128))[:, np.newaxis]
-    g = np.append(np.linspace(0, 255, 128), np.linspace(0, 255, 128)[::-1])[
-        :, np.newaxis
-    ]
-    color = np.concatenate((r, g, b), axis=-1).astype(np.uint8)
-    bwr = pg.ColorMap(pos=np.linspace(0.0, 255, 256), color=color)
-    return bwr
-
-
-def as_gray_image(image):
-    if image.ndim > 2:
-        return image[..., 0]
-    return image
-
 
 def run(image=None):
     from ..io import logger_setup
@@ -467,7 +370,7 @@ class MainW(QMainWindow):
         self.ModelButtonC.clicked.connect(self.run_selected_model)
         self.ModelButtonC.setEnabled(False)
 
-        self.ncells = guiparts.ObservableVariable(0)
+        self.ncells = ObservableVariable(0)
         self.ncells.valueChanged.connect(lambda *_: self.refresh_instance_table())
 
         self.instanceBox = QGroupBox("Instances")
@@ -1139,7 +1042,7 @@ class MainW(QMainWindow):
             self.update_layer()
 
     def make_viewbox(self):
-        self.p0 = guiparts.ViewBoxNoRightDrag(
+        self.p0 = ViewBoxNoRightDrag(
             parent=self,
             lockAspect=True,
             name="plot1",
@@ -1153,7 +1056,7 @@ class MainW(QMainWindow):
         self.p0.setMouseEnabled(x=True, y=True)
         self.img = pg.ImageItem(viewbox=self.p0, parent=self)
         self.img.autoDownsample = False
-        self.layer = guiparts.ImageDraw(viewbox=self.p0, parent=self)
+        self.layer = ImageDraw(viewbox=self.p0, parent=self)
         self.layer.setLevels([0, 255])
         self.scale = pg.ImageItem(viewbox=self.p0, parent=self)
         self.scale.setLevels([0, 255])
@@ -2036,7 +1939,7 @@ class MainW(QMainWindow):
             restore = None
 
         # train model
-        TW = guiparts.TrainWindow(self, models.MODEL_NAMES)
+        TW = TrainWindow(self, models.MODEL_NAMES)
         train = TW.exec()
         if train:
             train_data_folder = self.training_params.get("train_data_folder", "")
