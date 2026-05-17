@@ -303,14 +303,10 @@ class ImageDraw(pg.ImageItem):
         if (
             self.parent.masksOn or self.parent.outlinesOn
         ) and not self.parent.removing_region:
-            is_right_click = ev.button() == QtCore.Qt.RightButton
             if (
                 self.parent.loaded
-                and (
-                    is_right_click
-                    or ev.modifiers() & QtCore.Qt.ShiftModifier
-                    and not ev.double()
-                )
+                and ev.modifiers() & QtCore.Qt.ShiftModifier
+                and not ev.double()
                 and not self.parent.deleting_multiple
             ):
                 if not self.parent.in_stroke:
@@ -362,8 +358,6 @@ class ImageDraw(pg.ImageItem):
                 self.drawAt(ev.pos())
                 if self.is_at_start(ev.pos()):
                     self.end_stroke()
-        else:
-            ev.acceptClicks(QtCore.Qt.RightButton)
 
     def create_start(self, pos):
         self.scatter = pg.ScatterPlotItem(
