@@ -23,13 +23,17 @@ from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
     QGroupBox,
+    QHeaderView,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QSlider,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -468,6 +472,32 @@ class MainW(QMainWindow):
         self.ModelButtonC.setEnabled(False)
 
         self.ncells = guiparts.ObservableVariable(0)
+        self.ncells.valueChanged.connect(lambda *_: self.refresh_instance_table())
+
+        self.instanceBox = QGroupBox("Instances")
+        self.instanceBoxV = QVBoxLayout()
+        self.instanceBox.setLayout(self.instanceBoxV)
+        self.right_sidebar.addWidget(self.instanceBox, 2, 0, 1, 1)
+
+        instance_filter_layout = QHBoxLayout()
+        instance_filter_layout.addWidget(QLabel("class filter:"))
+        self.InstanceClassFilter = QLineEdit()
+        self.InstanceClassFilter.setPlaceholderText("all")
+        self.InstanceClassFilter.textChanged.connect(self.instance_filter_changed)
+        instance_filter_layout.addWidget(self.InstanceClassFilter)
+        self.InstanceFilterMasks = QCheckBox("filter masks")
+        self.InstanceFilterMasks.toggled.connect(self.instance_mask_filter_toggled)
+        instance_filter_layout.addWidget(self.InstanceFilterMasks)
+        self.instanceBoxV.addLayout(instance_filter_layout)
+
+        self._refreshing_instance_table = False
+        self.InstanceTable = QTableWidget(0, 2)
+        self.InstanceTable.setHorizontalHeaderLabels(["ROI", "Class ID"])
+        self.InstanceTable.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.InstanceTable.verticalHeader().setVisible(False)
+        self.InstanceTable.itemChanged.connect(self.set_instance_class_from_table)
+        self.instanceBoxV.addWidget(self.InstanceTable)
+
         self.progress = QProgressBar(self)
 
         self.seg_param_root = Parameter.create(
@@ -846,6 +876,119 @@ class MainW(QMainWindow):
         self.update_layer()
         self.toggle_saving()
         self.toggle_removals()
+        self.refresh_instance_table()
+
+    def _ensure_instance_classes(self):
+        ncells = self.ncells.get()
+        if not hasattr(self, "instance_classes"):
+            self.instance_classes = np.zeros(ncells, dtype=np.int32)
+            return
+        instance_classes = np.asarray(self.instance_classes, dtype=np.int32).ravel()
+        if len(instance_classes) < ncells:
+            pad = np.zeros(ncells - len(instance_classes), dtype=np.int32)
+            instance_classes = np.concatenate((instance_classes, pad))
+        elif len(instance_classes) > ncells:
+            instance_classes = instance_classes[:ncells]
+        self.instance_classes = instance_classes
+
+    def set_instance_classes(self, instance_classes=None):
+        ncells = self.ncells.get()
+        values = np.zeros(ncells, dtype=np.int32)
+        if instance_classes is not None:
+            loaded = np.asarray(instance_classes, dtype=np.int32).ravel()
+            loaded = np.maximum(loaded, 0)
+            n = min(ncells, len(loaded))
+            values[:n] = loaded[:n]
+        self.instance_classes = values
+        self.refresh_instance_table()
+
+    def instance_class_filter(self):
+        if not hasattr(self, "InstanceClassFilter"):
+            return None
+        text = self.InstanceClassFilter.text().strip()
+        if text == "":
+            return None
+        try:
+            class_id = int(text)
+        except ValueError:
+            return None
+        return class_id if class_id >= 0 else None
+
+    def instance_filter_changed(self):
+        self.refresh_instance_table()
+        if self.InstanceFilterMasks.isChecked():
+            self.draw_layer()
+            self.update_layer()
+
+    def instance_mask_filter_toggled(self):
+        self.draw_layer()
+        self.update_layer()
+
+    def visible_cell_pixels(self, cellpix):
+        filter_class_id = self.instance_class_filter()
+        if (
+            not hasattr(self, "InstanceFilterMasks")
+            or not self.InstanceFilterMasks.isChecked()
+            or filter_class_id is None
+        ):
+            return cellpix > 0
+
+        self._ensure_instance_classes()
+        max_label = int(cellpix.max())
+        visible_labels = np.zeros(max_label + 1, dtype=bool)
+        nlabels = min(max_label, len(self.instance_classes))
+        if nlabels > 0:
+            visible_labels[1 : nlabels + 1] = (
+                self.instance_classes[:nlabels] == filter_class_id
+            )
+        return visible_labels[cellpix]
+
+    def refresh_instance_table(self):
+        if not hasattr(self, "InstanceTable"):
+            return
+        self._ensure_instance_classes()
+        filter_class_id = self.instance_class_filter()
+        self._refreshing_instance_table = True
+        self.InstanceTable.blockSignals(True)
+        self.InstanceTable.setRowCount(self.ncells.get())
+        for row in range(self.ncells.get()):
+            roi_item = QTableWidgetItem(str(row + 1))
+            roi_item.setFlags(roi_item.flags() & ~QtCore.Qt.ItemIsEditable)
+            class_item = QTableWidgetItem(str(int(self.instance_classes[row])))
+            self.InstanceTable.setItem(row, 0, roi_item)
+            self.InstanceTable.setItem(row, 1, class_item)
+            self.InstanceTable.setRowHidden(
+                row,
+                filter_class_id is not None
+                and int(self.instance_classes[row]) != filter_class_id,
+            )
+        self.InstanceTable.blockSignals(False)
+        self._refreshing_instance_table = False
+
+    def set_instance_class_from_table(self, item):
+        if self._refreshing_instance_table or item.column() != 1:
+            return
+        row = item.row()
+        self._ensure_instance_classes()
+        if row >= len(self.instance_classes):
+            return
+        old_class_id = int(self.instance_classes[row])
+        try:
+            class_id = int(item.text())
+            if class_id < 0:
+                raise ValueError
+        except ValueError:
+            self.InstanceTable.blockSignals(True)
+            item.setText(str(old_class_id))
+            self.InstanceTable.blockSignals(False)
+            return
+        self.instance_classes[row] = class_id
+        self.refresh_instance_table()
+        if hasattr(self, "InstanceFilterMasks") and self.InstanceFilterMasks.isChecked():
+            self.draw_layer()
+            self.update_layer()
+        if self.loaded:
+            io._save_sets_with_check(self)
 
     def toggle_saving(self):
         if self.ncells > 0:
@@ -1142,6 +1285,7 @@ class MainW(QMainWindow):
         self.cellpix = np.zeros((1, self.Ly, self.Lx), np.uint16)
         self.outpix = np.zeros((1, self.Ly, self.Lx), np.uint16)
         self.ismanual = np.zeros(0, "bool")
+        self.instance_classes = np.zeros(0, dtype=np.int32)
 
         # -- set menus to default -- #
         self.view = 0
@@ -1207,10 +1351,12 @@ class MainW(QMainWindow):
             self.outpix = np.zeros((self.NZ, self.Ly, self.Lx), np.uint16)
 
         self.cellcolors = np.array([255, 255, 255])[np.newaxis, :]
+        self.instance_classes = np.zeros(0, dtype=np.int32)
         self.ncells.reset()
         self.toggle_removals()
         self.update_scale()
         self.update_layer()
+        self.refresh_instance_table()
 
     def select_cell(self, idx):
         self.prev_selected = self.selected
@@ -1220,6 +1366,11 @@ class MainW(QMainWindow):
             self.layerz[self.cellpix[z] == idx] = np.array(
                 [255, 255, 255, self.opacity]
             )
+            if (
+                hasattr(self, "InstanceTable")
+                and idx - 1 < self.InstanceTable.rowCount()
+            ):
+                self.InstanceTable.selectRow(idx - 1)
             self.update_layer()
 
     def select_cell_multi(self, idx):
@@ -1278,6 +1429,10 @@ class MainW(QMainWindow):
     def remove_single_cell(self, idx):
         # remove from manual array
         self.selected = 0
+        removed_class_id = 0
+        self._ensure_instance_classes()
+        if idx - 1 < len(self.instance_classes):
+            removed_class_id = int(self.instance_classes[idx - 1])
         if self.NZ > 1:
             zextent = ((self.cellpix == idx).sum(axis=(1, 2)) > 0).nonzero()[0]
         else:
@@ -1302,6 +1457,7 @@ class MainW(QMainWindow):
                 self.cellcolors[idx],
                 np.nonzero(cp),
                 np.nonzero(op),
+                removed_class_id,
             ]
             self.redo.setEnabled(True)
             ar, ac = self.removed_cell[2]
@@ -1312,6 +1468,8 @@ class MainW(QMainWindow):
         # remove cell from lists
         self.ismanual = np.delete(self.ismanual, idx - 1)
         self.cellcolors = np.delete(self.cellcolors, [idx], axis=0)
+        if idx - 1 < len(self.instance_classes):
+            self.instance_classes = np.delete(self.instance_classes, idx - 1)
         del self.zdraw[idx - 1]
         print("GUI_INFO: removed cell %d" % (idx - 1))
 
@@ -1414,8 +1572,10 @@ class MainW(QMainWindow):
             self.draw_mask(z, ar, ac, vr, vc, color)
             self.toggle_mask_ops()
             self.cellcolors = np.append(self.cellcolors, color[np.newaxis, :], axis=0)
-            self.ncells += 1
             self.ismanual = np.append(self.ismanual, self.removed_cell[0])
+            class_id = self.removed_cell[4] if len(self.removed_cell) > 4 else 0
+            self.instance_classes = np.append(self.instance_classes, class_id)
+            self.ncells += 1
             self.zdraw.append([])
             print(">>> added back removed cell")
             self.update_layer()
@@ -1571,8 +1731,11 @@ class MainW(QMainWindow):
                     self.cellcolors = np.append(
                         self.cellcolors, color[np.newaxis, :], axis=0
                     )
-                    self.ncells += 1
                     self.ismanual = np.append(self.ismanual, True)
+                    self.instance_classes = np.append(self.instance_classes, 0)
+                    self.ncells += 1
+                    if self.InstanceFilterMasks.isChecked():
+                        self.draw_layer()
                     if self.NZ == 1:
                         # only save after each cell if single image
                         io._save_sets_with_check(self)
@@ -1746,12 +1909,12 @@ class MainW(QMainWindow):
                     self.outpix = self.outpix_orig.copy()
 
         self.layerz = np.zeros((self.Ly, self.Lx, 4), np.uint8)
+        cellpix = self.cellpix[self.currentZ]
+        visible_pixels = self.visible_cell_pixels(cellpix)
         if self.masksOn:
-            self.layerz[..., :3] = self.cellcolors[self.cellpix[self.currentZ], :]
-            self.layerz[..., 3] = self.opacity * (
-                self.cellpix[self.currentZ] > 0
-            ).astype(np.uint8)
-            if self.selected > 0:
+            self.layerz[..., :3] = self.cellcolors[cellpix, :]
+            self.layerz[..., 3] = self.opacity * visible_pixels.astype(np.uint8)
+            if self.selected > 0 and visible_pixels[cellpix == self.selected].any():
                 self.layerz[self.cellpix[self.currentZ] == self.selected] = np.array(
                     [255, 255, 255, self.opacity]
                 )
@@ -1768,7 +1931,7 @@ class MainW(QMainWindow):
             self.layerz[..., 3] = 0
 
         if self.outlinesOn:
-            self.layerz[self.outpix[self.currentZ] > 0] = np.array(
+            self.layerz[(self.outpix[self.currentZ] > 0) & visible_pixels] = np.array(
                 self.outcolor
             ).astype(np.uint8)
 

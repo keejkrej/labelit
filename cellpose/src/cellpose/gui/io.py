@@ -481,6 +481,9 @@ def _load_seg(parent, filename=None, image=None, image_file=None, load_3D=False)
         if len(dat["ismanual"]) == parent.ncells:
             parent.ismanual = dat["ismanual"]
 
+    if hasattr(parent, "set_instance_classes"):
+        parent.set_instance_classes(dat.get("instance_classes"))
+
     if "flows" in dat:
         parent.flows = dat["flows"]
         try:
@@ -622,6 +625,8 @@ def _masks_to_gui(parent, masks, outlines=None, colors=None):
         parent.toggle_mask_ops()
     parent.ismanual = np.zeros(parent.ncells.get(), bool)
     parent.zdraw = list(-1 * np.ones(parent.ncells.get(), np.int16))
+    if hasattr(parent, "set_instance_classes"):
+        parent.set_instance_classes()
 
     if hasattr(parent, "stack_filtered"):
         parent.ViewDropDown.setCurrentIndex(parent.ViewDropDown.count() - 1)
@@ -769,6 +774,9 @@ def _save_sets(parent):
         }
         if parent.restore is not None:
             dat["img_restore"] = parent.stack_filtered
+    if hasattr(parent, "_ensure_instance_classes"):
+        parent._ensure_instance_classes()
+        dat["instance_classes"] = parent.instance_classes
     if (
         getattr(parent, "series_dataset", None) is not None
         and parent.series_index is not None
