@@ -10,7 +10,7 @@ from .version import version_str
 from cellpose.cli import get_arg_parser
 
 try:
-    from cellpose.gui import gui
+    from cellpose.gui import view as gui_view
     GUI_ENABLED = True
 except ImportError as err:
     GUI_ERROR = err
@@ -49,7 +49,7 @@ def main():
                     )
                     print("     pip install 'cellpose[gui]'")
             else:
-                gui.run()
+                gui_view.run()
             return
 
     ############################## run cellpose on images ##############################

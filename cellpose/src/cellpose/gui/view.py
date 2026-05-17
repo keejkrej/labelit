@@ -47,6 +47,7 @@ from ..plot import disk
 from ..transforms import normalize99, normalize99_tile, resize_image, smooth_sharpen_img
 from ..utils import download_url_to_file
 from . import guiparts, io, menus, series
+from .viewmodel import MainViewModel
 
 try:
     import matplotlib.pyplot as plt
@@ -211,6 +212,11 @@ class MainW(QMainWindow):
         app_icon.addFile(icon_path, QtCore.QSize(256, 256))
         self.setWindowIcon(app_icon)
 
+        self.view_model = MainViewModel(
+            model_save_folder=os.fspath(models.MODEL_DIR.joinpath("custom")),
+            parent=self,
+        )
+
         menus.mainmenu(self)
         menus.editmenu(self)
         menus.modelmenu(self)
@@ -259,10 +265,7 @@ class MainW(QMainWindow):
         self.NZ = 1
         self.restore = None
         self.ratio = 1.0
-        self.series_dataset = None
-        self.series_index = None
-        self.output_filename = None
-        self.display_filename = None
+        self._sync_series_state()
         self.last_series_subfolder_template = ""
         self.last_series_filename_template = ""
         self.reset()
@@ -274,18 +277,6 @@ class MainW(QMainWindow):
             self.filename = image
             io._load_image(self, self.filename)
 
-        # training settings
-        d = datetime.datetime.now()
-        self.training_params = {
-            "model_index": 0,
-            "learning_rate": 1e-5,
-            "weight_decay": 0.1,
-            "n_epochs": 100,
-            "model_name": "cpsam" + d.strftime("_%Y%m%d_%H%M%S"),
-            "train_data_folder": "",
-            "model_save_folder": os.fspath(models.MODEL_DIR.joinpath("custom")),
-        }
-
         self.stitch_threshold = 0.0
         self.flow3D_smooth = 0.0
         self.anisotropy = 1.0
@@ -294,6 +285,28 @@ class MainW(QMainWindow):
         self.setAcceptDrops(True)
         self.win.show()
         self.show()
+
+    @property
+    def training_params(self):
+        return self.view_model.training_params
+
+    @training_params.setter
+    def training_params(self, params):
+        self.view_model.set_training_parameters(params)
+
+    def _sync_series_state(self):
+        state = self.view_model.series_state
+        self.series_dataset = state.dataset
+        self.series_index = state.record_index
+        self.output_filename = state.output_filename
+        self.display_filename = state.display_filename
+        if state.filename is not None:
+            self.filename = state.filename
+
+    def set_series_state(self, dataset=None, record_index=None):
+        self.view_model.set_series(dataset=dataset, record_index=record_index)
+        self._sync_series_state()
+        self.set_series_navigation_state(self.series_dataset, self.series_index)
 
     def make_buttons(self):
         b = 0
@@ -623,63 +636,49 @@ class MainW(QMainWindow):
             return
 
     def get_segmentation_parameters(self):
-        diameter = float(self.seg_param_root.param("diameter").value())
-        diameter = diameter if diameter > 0 else None
-        low = float(self.seg_param_root.param("norm_percentile_low").value())
-        high = float(self.seg_param_root.param("norm_percentile_high").value())
-        if not 0 <= low <= 100 or not 0 <= high <= 100 or low >= high:
-            raise ValueError(
-                "normalization percentile range must be 0 <= low < high <= 100"
-            )
-        niter = int(self.seg_param_root.param("niter").value())
-        if niter < 1:
-            niter = 200
+        params = self.view_model.get_segmentation_parameters(
+            diameter=float(self.seg_param_root.param("diameter").value()),
+            flow_threshold=float(self.seg_param_root.param("flow_threshold").value()),
+            cellprob_threshold=float(
+                self.seg_param_root.param("cellprob_threshold").value()
+            ),
+            percentile_low=float(
+                self.seg_param_root.param("norm_percentile_low").value()
+            ),
+            percentile_high=float(
+                self.seg_param_root.param("norm_percentile_high").value()
+            ),
+            niter=int(self.seg_param_root.param("niter").value()),
+        )
+        low, high = params.percentile
 
         if self.seg_param_root.param("norm_percentile_low").value() != low:
             self.seg_param_root.param("norm_percentile_low").setValue(low)
         if self.seg_param_root.param("norm_percentile_high").value() != high:
             self.seg_param_root.param("norm_percentile_high").setValue(high)
-        if self.seg_param_root.param("niter").value() != niter:
-            self.seg_param_root.param("niter").setValue(niter)
-        return {
-            "diameter": diameter,
-            "flow_threshold": float(
-                self.seg_param_root.param("flow_threshold").value()
-            ),
-            "cellprob_threshold": float(
-                self.seg_param_root.param("cellprob_threshold").value()
-            ),
-            "percentile": (low, high),
-            "niter": niter,
-        }
+        if self.seg_param_root.param("niter").value() != params.niter:
+            self.seg_param_root.param("niter").setValue(params.niter)
+        return params.to_dict()
 
     def get_preprocessing_parameters(self):
-        sharpen_radius = max(
-            0, float(self.preprocessing_param_root.param("sharpen_radius").value())
+        params = self.view_model.get_preprocessing_parameters(
+            sharpen_radius=float(
+                self.preprocessing_param_root.param("sharpen_radius").value()
+            ),
+            smooth_radius=float(
+                self.preprocessing_param_root.param("smooth_radius").value()
+            ),
+            tile_norm_blocksize=float(
+                self.preprocessing_param_root.param("tile_norm_blocksize").value()
+            ),
+            tile_norm_smooth3D=float(
+                self.preprocessing_param_root.param("tile_norm_smooth3D").value()
+            ),
+            norm3D=self.norm3DCheckBox.isChecked(),
+            image_shape=(self.Ly, self.Lx),
+            invert=False,
         )
-        smooth_radius = max(
-            0, float(self.preprocessing_param_root.param("smooth_radius").value())
-        )
-        tile_norm_blocksize = max(
-            0, float(self.preprocessing_param_root.param("tile_norm_blocksize").value())
-        )
-        tile_norm_smooth3D = max(
-            0, float(self.preprocessing_param_root.param("tile_norm_smooth3D").value())
-        )
-        if tile_norm_blocksize > self.Ly and tile_norm_blocksize > self.Lx:
-            print(
-                "GUI_ERROR: tile size (tile_norm) bigger than both image dimensions, disabling"
-            )
-            tile_norm_blocksize = 0
-
-        return {
-            "sharpen_radius": sharpen_radius,
-            "smooth_radius": smooth_radius,
-            "tile_norm_blocksize": tile_norm_blocksize,
-            "tile_norm_smooth3D": tile_norm_smooth3D,
-            "norm3D": self.norm3DCheckBox.isChecked(),
-            "invert": False,
-        }
+        return params.to_dict()
 
     def set_preprocessing_parameters(self, params):
         self.preprocessing_param_root.param("sharpen_radius").setValue(
@@ -842,39 +841,21 @@ class MainW(QMainWindow):
 
     def _ensure_instance_classes(self):
         ncells = self.ncells.get()
-        if not hasattr(self, "instance_classes"):
-            self.instance_classes = np.zeros(ncells, dtype=np.int32)
-            return
-        instance_classes = np.asarray(self.instance_classes, dtype=np.int32).ravel()
-        if len(instance_classes) < ncells:
-            pad = np.zeros(ncells - len(instance_classes), dtype=np.int32)
-            instance_classes = np.concatenate((instance_classes, pad))
-        elif len(instance_classes) > ncells:
-            instance_classes = instance_classes[:ncells]
-        self.instance_classes = instance_classes
+        current_values = getattr(self, "instance_classes", None)
+        self.instance_classes = self.view_model.ensure_instance_classes(
+            ncells, current_values=current_values
+        )
 
     def set_instance_classes(self, instance_classes=None):
-        ncells = self.ncells.get()
-        values = np.zeros(ncells, dtype=np.int32)
-        if instance_classes is not None:
-            loaded = np.asarray(instance_classes, dtype=np.int32).ravel()
-            loaded = np.maximum(loaded, 0)
-            n = min(ncells, len(loaded))
-            values[:n] = loaded[:n]
-        self.instance_classes = values
+        self.instance_classes = self.view_model.set_instance_classes(
+            self.ncells.get(), instance_classes
+        )
         self.refresh_instance_table()
 
     def instance_class_filter(self):
         if not hasattr(self, "InstanceClassFilter"):
             return None
-        text = self.InstanceClassFilter.text().strip()
-        if text == "":
-            return None
-        try:
-            class_id = int(text)
-        except ValueError:
-            return None
-        return class_id if class_id >= 0 else None
+        return self.view_model.instance_class_filter(self.InstanceClassFilter.text())
 
     def instance_filter_changed(self):
         self.refresh_instance_table()
@@ -883,18 +864,8 @@ class MainW(QMainWindow):
 
     def visible_cell_pixels(self, cellpix):
         filter_class_id = self.instance_class_filter()
-        if filter_class_id is None:
-            return cellpix > 0
-
         self._ensure_instance_classes()
-        max_label = int(cellpix.max())
-        visible_labels = np.zeros(max_label + 1, dtype=bool)
-        nlabels = min(max_label, len(self.instance_classes))
-        if nlabels > 0:
-            visible_labels[1 : nlabels + 1] = (
-                self.instance_classes[:nlabels] == filter_class_id
-            )
-        return visible_labels[cellpix]
+        return self.view_model.visible_cell_pixels(cellpix, filter_class_id)
 
     def refresh_instance_table(self):
         if not hasattr(self, "InstanceTable"):
@@ -935,7 +906,7 @@ class MainW(QMainWindow):
             item.setText(str(old_class_id))
             self.InstanceTable.blockSignals(False)
             return
-        self.instance_classes[row] = class_id
+        self.instance_classes = self.view_model.set_instance_class(row, class_id)
         self.refresh_instance_table()
         self.draw_layer()
         self.update_layer()
@@ -1240,8 +1211,8 @@ class MainW(QMainWindow):
         self.clear_all()
 
         self.filename = []
-        self.output_filename = None
-        self.display_filename = None
+        self.view_model.reset_series()
+        self._sync_series_state()
         self.loaded = False
         self.recompute_masks = False
 

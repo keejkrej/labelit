@@ -132,32 +132,51 @@ def _get_train_set(image_names):
 
 
 def _clear_series_state(parent):
-    parent.series_dataset = None
-    parent.series_index = None
-    parent.output_filename = None
-    parent.display_filename = None
+    if hasattr(parent, "view_model"):
+        parent.view_model.reset_series()
+        if hasattr(parent, "_sync_series_state"):
+            parent._sync_series_state()
+    else:
+        parent.series_dataset = None
+        parent.series_index = None
+        parent.output_filename = None
+        parent.display_filename = None
     if hasattr(parent, "set_series_navigation_state"):
         parent.set_series_navigation_state()
 
 
 def _set_series_state(parent, dataset=None, item_index=None):
-    parent.series_dataset = dataset
-    parent.series_index = item_index
     if dataset is None or item_index is None:
-        parent.output_filename = None
+        if hasattr(parent, "view_model"):
+            parent.view_model.reset_series()
+            if hasattr(parent, "_sync_series_state"):
+                parent._sync_series_state()
+        else:
+            parent.series_dataset = None
+            parent.series_index = None
+            parent.output_filename = None
         if hasattr(parent, "set_series_navigation_state"):
             parent.set_series_navigation_state()
         return
 
-    item = dataset["records"][item_index]
-    parent.output_filename = series.get_output_filename(dataset, item_index)
-    parent.display_filename = item["label"]
-    parent.filename = item["path"]
+    if hasattr(parent, "view_model"):
+        parent.view_model.set_series(dataset=dataset, record_index=item_index)
+        if hasattr(parent, "_sync_series_state"):
+            parent._sync_series_state()
+    else:
+        item = dataset["records"][item_index]
+        parent.series_dataset = dataset
+        parent.series_index = item_index
+        parent.output_filename = series.get_output_filename(dataset, item_index)
+        parent.display_filename = item["label"]
+        parent.filename = item["path"]
     if hasattr(parent, "set_series_navigation_state"):
         parent.set_series_navigation_state(dataset, item_index)
 
 
 def _get_output_filename(parent):
+    if hasattr(parent, "view_model"):
+        return parent.view_model.output_filename(parent.filename)
     return parent.output_filename if getattr(parent, "output_filename", None) else parent.filename
 
 

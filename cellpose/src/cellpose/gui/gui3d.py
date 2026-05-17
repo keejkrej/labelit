@@ -14,7 +14,7 @@
 
 # from . import guiparts, io
 # from ..utils import download_url_to_file, masks_to_outlines
-# from .gui import MainW
+# from .view import MainW
 
 # try:
 #     import matplotlib.pyplot as plt
