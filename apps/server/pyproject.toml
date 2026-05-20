@@ -18,8 +18,6 @@ dependencies = [
     "pillow>=10",
     "imageio>=2.34",
     "tifffile>=2024.1",
-    # cellpose (editable workspace member; see uv workspace config in repo root)
-    "cellacdc",
     "cellpose>=4.1",
     "labelit-contracts",
 ]
@@ -46,8 +44,6 @@ url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.uv.sources]
-cellpose = { workspace = true }
-cellacdc = { workspace = true }
 labelit-contracts = { workspace = true }
 torch = [{ index = "pytorch", marker = "sys_platform != 'darwin'" }]
 torchvision = [{ index = "pytorch", marker = "sys_platform != 'darwin'" }]
