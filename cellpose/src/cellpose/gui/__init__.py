@@ -1,2 +1,0 @@
-"""Cellpose GUI package."""
-

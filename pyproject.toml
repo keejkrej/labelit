@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["cellacdc", "cellpose", "apps/server", "python/contracts"]
+members = ["apps/server", "python/contracts"]
 
 [tool.uv]
 exclude-newer = "7 days"
